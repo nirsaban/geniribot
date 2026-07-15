@@ -14,6 +14,8 @@
     "@kesher/calendar": "workspace:*",
     "@kesher/core": "workspace:*",
     "@kesher/db": "workspace:*",
+    "@kesher/flow-engine": "workspace:*",
+    "@xyflow/react": "^12",
     "next": "^15.1.4",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",

@@ -97,6 +97,30 @@ export const he = {
   inactive: "כבוי",
   colVersion: "גרסה",
   colSteps: "שלבים",
+  editFlow: "עריכה",
+  newFlow: "תסריט חדש",
+  activate: "הפעל",
+  deactivate: "כבה",
+  backToFlows: "→ חזרה לתסריטים",
+
+  // flow builder
+  saveFlow: "שמור תסריט",
+  saved: "נשמר ✅",
+  saveError: "שגיאה",
+  selectNode: "בחר/י שלב לעריכה",
+  startNode: "שלב התחלה",
+  endNode: "סיום",
+  deleteNode: "מחק שלב",
+  fMessage: "טקסט ההודעה",
+  fPrompt: "טקסט השאלה",
+  fField: "שם השדה (לשמירה)",
+  fExpect: "סוג תשובה",
+  fChoices: "אפשרויות (מופרדות בפסיק)",
+  fWhen: "תנאי",
+  fThen: "אם כן →",
+  fElse: "אם לא →",
+  fAction: "פעולה",
+  fNext: "השלב הבא →",
 } as const;
 
 export type HeKey = keyof typeof he;

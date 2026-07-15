@@ -59,9 +59,12 @@ scale & polish.
 - **To go live with Google:** set `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` (+ optional 32-byte `SECRETS_KEY`); the live OAuth consent needs a real Google account (not testable here).
 - Still to do (later): reschedule/cancel deletes the calendar event + reschedules reminders.
 
-### Phase 6 — Visual flow builder
-- React Flow drag-and-drop editor that reads/writes the same `Flow.definition` JSON.
-- Flow templates library; versioning + activate/rollback; test-run mode.
+### Phase 6 — Visual flow builder ✅ DONE (2026-07-15)
+- [x] React Flow (`@xyflow/react`) editor at `/dashboard/flows/[id]/edit`: renders the node graph (typed/colored nodes, then/else edges), draggable layout, property panel per node type (message/question/condition/action), add/delete nodes, set next/then/else + start node.
+- [x] Reads/writes the same `Flow.definition` JSON; node positions persisted in a `_positions` key that the pure engine strips on parse (layout never breaks the runtime).
+- [x] Save validates via the engine's `FlowDefinition` zod + bumps `version`; flows list has activate/deactivate + "new flow from template" (lead / support templates).
+- **Verified live:** editor renders with graph data; save round-trip → validation (good passes, broken rejected) + version bump + layout persisted + engine still parses. 15/15 typecheck, 20/20 tests.
+- Still to do (later): drag-to-connect edges, rollback to a prior version, in-editor test-run.
 
 ### Phase 7 — SaaS-ready
 - Billing (Stripe/Paddle): plans cap connections / contacts / monthly messages; usage metering.
