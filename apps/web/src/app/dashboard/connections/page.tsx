@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
+import { BotStatus, getBotReadiness } from "@/components/BotStatus";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { withBase } from "@/lib/basePath";
 import { he } from "@/lib/he";
@@ -25,10 +26,12 @@ export default async function ConnectionsPage() {
 
   const origin = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";
   const webhookUrl = `${origin}${withBase("/api/webhooks/whatsapp")}`;
+  const readiness = await getBotReadiness(session.org);
 
   return (
     <>
       <PageHeader title={he.connectionsTitle} subtitle={he.connectionsSubtitle} />
+      <BotStatus r={readiness} />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         {/* Baileys (QR) */}

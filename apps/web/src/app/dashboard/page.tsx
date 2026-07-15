@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
+import { BotStatus, getBotReadiness } from "@/components/BotStatus";
 import { Card, EmptyState, LinkButton, PageHeader, Stat } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
@@ -55,13 +56,15 @@ export default async function DashboardPage() {
   }
   const topServices = [...svc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  const needsSetup = connections === 0;
+  const readiness = await getBotReadiness(session.org);
 
   return (
     <>
       <PageHeader title={`${he.overviewHi}, ${org.name} 👋`} subtitle={he.overviewSub} />
 
-      {needsSetup && (
+      <BotStatus r={readiness} />
+
+      {connections === 0 && (
         <Card className="mb-6 !bg-gradient-to-l !from-brand/5 !to-transparent">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>

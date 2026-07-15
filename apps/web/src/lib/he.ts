@@ -67,6 +67,17 @@ export const he = {
   platformGrowDesc: "מפתחות Grow ברמת הפלטפורמה. רק אתה (מנהל-על) רואה זאת. לקוחות אינם נחשפים לתשלום.",
   backToApp: "→ לאזור הלקוח",
 
+  // bot readiness status
+  statusLive: "הבוט פעיל ועונה ללקוחות",
+  statusLiveHint: "שלח/י הודעת בדיקה למספר המחובר כדי לראות את הבוט בפעולה.",
+  statusNoNumber: "אין מספר וואטסאפ מחובר",
+  statusNoNumberHint: "חבר/י מספר (סריקת QR) כדי שהבוט יתחיל לעבוד.",
+  statusNoFlow: "מחובר — אבל אין בוט פעיל",
+  statusNoFlowHint: "הפעל/י תסריט כדי שהבוט יתחיל לענות ללקוחות.",
+  statusConnectNumber: "לחיבור מספר",
+  statusActivateFlow: "להפעלת בוט",
+  statusTestNumber: "שלח/י הודעת בדיקה אל",
+
   // connections
   connectionsTitle: "חיבורי וואטסאפ",
   connectionsSubtitle: "חבר/י מספר וואטסאפ כדי שהבוט יתחיל לענות ללידים",
