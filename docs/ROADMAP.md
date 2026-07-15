@@ -83,6 +83,13 @@ scale & polish.
 
 **Phases 0–8 core all shipped. Live at https://wabot.miltech.cloud.**
 
+### Phase 9 — Super-admin, platform billing & UI redesign ✅ DONE (2026-07-15)
+- [x] **Super admin control plane** (`User.isSuperAdmin` + session `sa` claim): `/admin` panel — all orgs table, manual plan unlock, per-org+plan Grow payment-link generation, platform-level Grow credentials. Seeded `admin@kesher.local` / `admin1234` on a "platform" org.
+- [x] **Billing moved to platform**: Grow keys live with the super admin (`growPlatformProvider`); the Grow webhook unlocks the paying org's plan. **All Grow removed from regular users** (gone from settings + onboarding).
+- [x] **Full UI redesign** (pro): Heebo font, refined palette, `@layer` component classes (card/btn/input/badge), shared primitives (PageHeader/Card/Stat/EmptyState), sidebar app-shell; every page redesigned; dashboard overview now has KPIs + a 14-day leads chart + top-topics + recent-leads — "big boss" view.
+- [x] Onboarding reworked (WhatsApp → availability → Google) with a clear "how it works" strip.
+- **Verified live:** user UI + admin panel render; user blocked from `/admin` (307); Grow absent for users; core loop (message→trigger→flow→collected→CRM) intact. 17/17 typecheck, 23/23 tests.
+
 ## Immediate next step
 Approve/adjust the plan, then I scaffold **Phase 0** (monorepo + db + auth + docker-compose)
 so there's a running skeleton to build on.

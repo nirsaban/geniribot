@@ -207,6 +207,27 @@ export const he = {
   triggerKeyword: "מילות מפתח",
   triggerKeywordsLabel: "מילים שיפעילו (מופרדות בפסיק)",
   triggerKeywordsHint: "לדוגמה: מעוניין, פגישה, מחיר",
+  startNodeTitle: "התחלה",
+  startNodeAny: "מתחיל בכל הודעה",
+  startNodeKeyword: "מתחיל אם ההודעה מכילה:",
+
+  // flow builder — node kinds & help
+  nodeKindMessage: "הודעה",
+  nodeKindQuestion: "שאלה",
+  nodeKindCondition: "תנאי",
+  nodeKindAction: "פעולה",
+  nodeDescMessage: "שולח טקסט ללקוח (בלי לחכות לתשובה)",
+  nodeDescQuestion: "שואל שאלה ושומר את התשובה בכרטיס הליד",
+  nodeDescCondition: "מפצל את המסלול לפי תשובה (כן / לא)",
+  nodeDescAction: "מבצע פעולה: קביעת פגישה, התראה, תגית ועוד",
+  addStep: "הוסף שלב",
+  savesTo: "💾 נשמר לשדה",
+  dragHint: "💡 גרור/י מנקודת החיבור בתחתית שלב אל שלב אחר כדי לחבר ביניהם",
+  questionSaveHint: "התשובה של הלקוח תישמר בכרטיס הליד תחת שם השדה הזה ותופיע ב-CRM.",
+  chooseWhatToAsk: "מה לשאול את הלקוח?",
+  chooseFieldName: "לאיזה שדה לשמור? (למשל: name, phone, budget)",
+  chooseAnswerType: "סוג התשובה הצפויה",
+  chooseAction: "איזו פעולה לבצע?",
 
   // flow builder
   saveFlow: "שמור תסריט",
