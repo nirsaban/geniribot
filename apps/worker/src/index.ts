@@ -1,8 +1,16 @@
 import http from "node:http";
 import { Worker } from "bullmq";
 import { childLogger } from "@kesher/core";
-import { bullConnection, connection, INBOUND_QUEUE, type InboundJob } from "./queues.js";
+import {
+  bullConnection,
+  connection,
+  INBOUND_QUEUE,
+  REMINDERS_QUEUE,
+  type InboundJob,
+  type ReminderJob,
+} from "./queues.js";
 import { processInbound } from "./process-inbound.js";
+import { processReminder } from "./process-reminder.js";
 
 const log = childLogger("worker");
 
@@ -19,6 +27,18 @@ worker.on("failed", (job, err) => {
 });
 worker.on("completed", (job) => {
   log.debug({ jobId: job.id }, "inbound job completed");
+});
+
+// Delayed appointment reminders (−24h / −1h).
+const reminderWorker = new Worker<ReminderJob>(
+  REMINDERS_QUEUE,
+  async (job) => {
+    await processReminder(job.data);
+  },
+  { connection: bullConnection, concurrency: 4 },
+);
+reminderWorker.on("failed", (job, err) => {
+  log.error({ jobId: job?.id, err }, "reminder job failed");
 });
 
 // Tiny health server so the container has a liveness probe.
@@ -39,6 +59,7 @@ log.info("worker started; consuming " + INBOUND_QUEUE);
 async function shutdown() {
   log.info("shutting down worker");
   await worker.close();
+  await reminderWorker.close();
   await connection.quit();
   process.exit(0);
 }

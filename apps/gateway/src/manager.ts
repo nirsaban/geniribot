@@ -96,7 +96,8 @@ export class SessionManager {
         text: msg.text,
         externalId: msg.externalId,
       },
-      { jobId: `${msg.connectionId}:${msg.externalId}` }, // idempotency
+      // BullMQ custom job ids cannot contain ":" — use "_" and strip any from the id.
+      { jobId: `${msg.connectionId}_${msg.externalId.replace(/:/g, "-")}` }, // idempotency
     );
   }
 

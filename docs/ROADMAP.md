@@ -50,9 +50,14 @@ scale & polish.
 - Still to do (later): hosted booking page (public link, same engine), reschedule/cancel.
 - **Exit:** ✅ a lead books a sales call end-to-end from a WhatsApp conversation. **MVP (Phases 0–4) complete.**
 
-### Phase 5 — Google Calendar sync + reminders
-- Google OAuth per user; two-way sync (write events, read freebusy to block slots).
-- Delayed BullMQ reminder jobs (−24h / −1h) over WhatsApp; cancel/reschedule handling.
+### Phase 5 — Google Calendar sync + reminders ✅ DONE (2026-07-15)
+- [x] `@kesher/calendar` package: `CalendarProvider` interface + `GoogleCalendarProvider` (google-auth-library OAuth + Calendar REST); OAuth helpers (auth URL, code exchange).
+- [x] OAuth flow in web: `/api/integrations/google/{start,callback}` + `/dashboard/settings` connect/disconnect. Tokens encrypted at rest (AES-256-GCM, `@kesher/core` crypto, unit-tested).
+- [x] Two-way sync (best-effort): on booking → create Google event (store `googleEventId`); slot generation subtracts the calendar's freeBusy. Degrades gracefully with no calendar / no Google config.
+- [x] Reminders: delayed BullMQ jobs (−24h / −1h) scheduled on booking; a reminder worker sends the WhatsApp reminder (skips past windows + cancelled appts).
+- **Verified:** reminder fired end-to-end (booked → scheduled → WhatsApp reminder message produced); settings page + graceful degradation live (no creds → feature hidden, booking/reminders still work). Fixed a latent bug: BullMQ job ids can't contain `:` (inbound idempotency + reminder ids). 15/15 typecheck, 20/20 tests.
+- **To go live with Google:** set `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` (+ optional 32-byte `SECRETS_KEY`); the live OAuth consent needs a real Google account (not testable here).
+- Still to do (later): reschedule/cancel deletes the calendar event + reschedules reminders.
 
 ### Phase 6 — Visual flow builder
 - React Flow drag-and-drop editor that reads/writes the same `Flow.definition` JSON.

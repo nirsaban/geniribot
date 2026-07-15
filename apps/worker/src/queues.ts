@@ -10,6 +10,7 @@ export const bullConnection = connection as unknown as ConnectionOptions;
 
 export const INBOUND_QUEUE = "wa-inbound";
 export const OUTBOUND_QUEUE = "wa-outbound";
+export const REMINDERS_QUEUE = "wa-reminders";
 
 /** Inbound: a normalized WhatsApp message from the gateway to be processed. */
 export interface InboundJob {
@@ -33,3 +34,13 @@ export const outboundQueue = new Queue<OutboundJob>(OUTBOUND_QUEUE, {
 });
 
 export const OUTBOUND_JOB = "send";
+
+export interface ReminderJob {
+  appointmentId: string;
+  kind: "24h" | "1h";
+}
+
+/** Delayed reminder jobs (−24h / −1h before an appointment). */
+export const remindersQueue = new Queue<ReminderJob>(REMINDERS_QUEUE, {
+  connection: bullConnection,
+});

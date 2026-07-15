@@ -75,6 +75,20 @@ export const he = {
   msgIn: "ליד",
   msgOut: "בוט",
 
+  // settings / integrations
+  settings: "הגדרות",
+  settingsTitle: "הגדרות ואינטגרציות",
+  googleCalendar: "יומן Google",
+  googleCalendarDesc: "סנכרון דו־כיווני: פגישות שנקבעות ייווצרו ביומן, ושעות תפוסות יחסמו מהצעת מועדים.",
+  connectGoogle: "חבר/י יומן Google",
+  disconnectGoogle: "נתק יומן",
+  googleConnected: "יומן Google מחובר ✅",
+  googleNotConfigured: "אינטגרציית Google לא הוגדרה בשרת (חסר GOOGLE_CLIENT_ID/SECRET).",
+  googleConnectedMsg: "היומן חובר בהצלחה!",
+  googleErrorMsg: "החיבור נכשל, נסה/י שוב.",
+  remindersTitle: "תזכורות",
+  remindersDesc: "לפני כל פגישה נשלחות ללקוח תזכורות אוטומטיות בוואטסאפ (24 שעות ושעה לפני).",
+
   // flows
   flowsTitle: "בוטים (תסריטים)",
   flowsSubtitle: "התסריטים שהבוט מריץ מול לידים",

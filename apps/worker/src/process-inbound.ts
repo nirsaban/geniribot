@@ -8,8 +8,16 @@ import {
   type FlowState,
   type StepResult,
 } from "@kesher/flow-engine";
+import { orgCalendar } from "./calendar.js";
 import { formatSlot, offerSlots, slotMenu } from "./booking.js";
-import { OUTBOUND_JOB, outboundQueue, type InboundJob } from "./queues.js";
+import {
+  OUTBOUND_JOB,
+  outboundQueue,
+  remindersQueue,
+  type InboundJob,
+} from "./queues.js";
+
+const HOUR = 3600 * 1000;
 
 const log = childLogger("worker:inbound");
 
@@ -148,7 +156,7 @@ async function handleBookingReply(
   }
 
   const slot = offered[pick - 1]!;
-  await prisma.appointment.create({
+  const appt = await prisma.appointment.create({
     data: {
       organizationId: ctx.organizationId,
       contactId: ctx.contactId,
@@ -158,6 +166,10 @@ async function handleBookingReply(
     },
   });
   await sendOut(`מצוין! נקבעה שיחה ל־${formatSlot(new Date(slot.start))} ✅`, ctx);
+
+  // Google Calendar event + WhatsApp reminders (both optional / best-effort).
+  await syncCalendarEvent(appt.id, ctx);
+  await scheduleReminders(appt.id, appt.startsAt);
 
   // Resume the flow after the booking (e.g. the closing message).
   const resumed = resumeBooking(flow, state);
@@ -219,4 +231,42 @@ function normalizeState(s: Partial<FlowState>): FlowState {
     resumeNodeId: s.resumeNodeId,
     booking: s.booking,
   };
+}
+
+/** Best-effort: mirror the appointment into the tenant's Google Calendar. */
+async function syncCalendarEvent(appointmentId: string, ctx: Ctx): Promise<void> {
+  const cal = await orgCalendar(ctx.organizationId);
+  if (!cal) return;
+  const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appt) return;
+  try {
+    const { id } = await cal.createEvent({
+      summary: `שיחת מכירה — ${ctx.contactName ?? ctx.to}`,
+      description: "נקבע דרך Kesher",
+      startISO: appt.startsAt.toISOString(),
+      endISO: appt.endsAt.toISOString(),
+      timezone: "Asia/Jerusalem",
+    });
+    await prisma.appointment.update({ where: { id: appt.id }, data: { googleEventId: id } });
+  } catch (err) {
+    log.warn({ err: (err as Error).message, appointmentId }, "google createEvent failed");
+  }
+}
+
+/** Schedule −24h / −1h WhatsApp reminders (skips windows already passed). */
+async function scheduleReminders(appointmentId: string, startsAt: Date): Promise<void> {
+  const now = Date.now();
+  const plan: Array<{ kind: "24h" | "1h"; before: number }> = [
+    { kind: "24h", before: 24 * HOUR },
+    { kind: "1h", before: HOUR },
+  ];
+  for (const p of plan) {
+    const delay = startsAt.getTime() - p.before - now;
+    if (delay <= 0) continue;
+    await remindersQueue.add(
+      "remind",
+      { appointmentId, kind: p.kind },
+      { delay, jobId: `${appointmentId}_${p.kind}`, removeOnComplete: true },
+    );
+  }
 }

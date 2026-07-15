@@ -81,6 +81,12 @@ export default async function DashboardPage() {
         >
           {he.flows} →
         </Link>
+        <Link
+          href="/dashboard/settings"
+          className="inline-block rounded-lg border border-gray-300 px-5 py-2 font-semibold text-gray-700 hover:bg-gray-100"
+        >
+          {he.settings} →
+        </Link>
       </nav>
 
       <p className="mt-8 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">{he.phase0Note}</p>

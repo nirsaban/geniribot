@@ -1,5 +1,9 @@
 import { prisma } from "@kesher/db";
-import { generateSlots, type Slot } from "@kesher/scheduling";
+import { generateSlots, type Interval, type Slot } from "@kesher/scheduling";
+import { childLogger } from "@kesher/core";
+import { orgCalendar } from "./calendar.js";
+
+const blog = childLogger("worker:booking");
 
 const OFFER_COUNT = 5;
 const LOOKAHEAD_DAYS = 14;
@@ -35,6 +39,20 @@ export async function offerSlots(
     select: { startsAt: true, endsAt: true },
   });
 
+  const busy: Interval[] = booked.map((b) => ({ start: b.startsAt, end: b.endsAt }));
+
+  // Merge the connected Google Calendar's busy blocks (if any).
+  const cal = await orgCalendar(organizationId);
+  if (cal) {
+    try {
+      const until = new Date(now.getTime() + LOOKAHEAD_DAYS * 24 * 3600 * 1000);
+      const gbusy = await cal.freeBusy(now.toISOString(), until.toISOString());
+      busy.push(...gbusy);
+    } catch (err) {
+      blog.warn({ err: (err as Error).message }, "google freeBusy failed; ignoring");
+    }
+  }
+
   const slots = generateSlots({
     rules: rules.map((r) => ({
       weekday: r.weekday,
@@ -47,7 +65,7 @@ export async function offerSlots(
     days: LOOKAHEAD_DAYS,
     now,
     minNoticeMinutes: MIN_NOTICE_MIN,
-    busy: booked.map((b) => ({ start: b.startsAt, end: b.endsAt })),
+    busy,
   });
 
   return slots.slice(0, OFFER_COUNT);
