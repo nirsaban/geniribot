@@ -51,6 +51,35 @@ export const he = {
     DISCONNECTED: "מנותק",
     LOGGED_OUT: "נותק מהמכשיר",
   },
+
+  // leads / CRM
+  leadsTitle: "לידים",
+  leadsSubtitle: "כל מי שכתב לבוט — עם התשובות שנאספו",
+  searchLeads: "חיפוש לפי שם או טלפון…",
+  noLeads: "עדיין אין לידים. ברגע שמישהו יכתוב לבוט הוא יופיע כאן.",
+  colName: "שם",
+  colPhone: "טלפון",
+  colTags: "תגיות",
+  colCreated: "נוצר",
+  colFields: "תשובות",
+  backToLeads: "→ חזרה ללידים",
+  leadDetails: "פרטי ליד",
+  collectedFields: "תשובות שנאספו",
+  transcript: "שיחה",
+  noMessages: "אין הודעות עדיין",
+  appointmentsTitle: "פגישות",
+  noAppointments: "אין פגישות",
+  msgIn: "ליד",
+  msgOut: "בוט",
+
+  // flows
+  flowsTitle: "בוטים (תסריטים)",
+  flowsSubtitle: "התסריטים שהבוט מריץ מול לידים",
+  noFlows: "אין תסריטים עדיין",
+  active: "פעיל",
+  inactive: "כבוי",
+  colVersion: "גרסה",
+  colSteps: "שלבים",
 } as const;
 
 export type HeKey = keyof typeof he;

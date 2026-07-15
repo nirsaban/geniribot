@@ -2,7 +2,7 @@
 
 > Working codename: **Kesher** (קשר, "contact / connection"). Rename freely.
 
-**🌐 Live:** https://miltech.cloud/kesher  ·  demo login: `demo@kesher.local` / `demo1234`
+**🌐 Live:** https://wabot.miltech.cloud  ·  demo login: `demo@kesher.local` / `demo1234`
 
 A multi-tenant SaaS that lets any business **connect a WhatsApp number**, build a
 **simple conversational bot** that collects answers from incoming leads, stores every

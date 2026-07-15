@@ -22,17 +22,24 @@ scale & polish.
 - **Verified:** gateway boots, connect → Baileys emits a real QR in ~1s, QR rendered in dashboard, auth-state (creds w/ Buffer serialization) persisted to Postgres, **gateway restart rehydrates the same identity** (registrationId stable), API route 401s without session. 12/12 typecheck, 15/15 tests.
 - **Remaining manual step (needs a physical phone):** scan the QR to pair, then message the number to see the seeded flow reply — the send/receive plumbing (Baileys ↔ queues ↔ flow-engine) is all wired and unit-tested.
 
+> **Deployed 2026-07-15:** live at https://wabot.miltech.cloud (own cert + nginx reverse proxy).
+> Committed to git. See docs/DECISIONS.md / kesher-app memory for deploy details.
+
 ### Phase 2 — Flow engine + runtime (the bot works)
 - `packages/flow-engine`: pure `step()` reducer, node types (message/question/condition/action), validators, full unit tests.
 - `apps/worker` inbound processor: resolve Contact, load/persist Conversation state, run the engine, enqueue outbound, save Answers + Messages.
 - One seeded JSON lead-collection flow (name → need → contact info).
 - **Exit:** a lead completes the flow over real WhatsApp; every answer is a row in Postgres.
 
-### Phase 3 — Dashboard / CRM (see the data)
-- Leads/contacts table (search, filter by tag, view collected fields), lead detail + full conversation transcript.
-- Flows list; conversations list with status; basic KPIs (new leads, completion rate).
-- Assign owner, add tags, manual notes.
-- **Exit:** the business can actually work its leads from the dashboard.
+### Phase 3 — Dashboard / CRM (see the data) ✅ DONE (2026-07-15)
+- [x] Leads/contacts table (`/dashboard/leads`) with name/phone search, tags, collected-fields summary.
+- [x] Lead detail (`/dashboard/leads/[id]`): collected fields, tags, appointments, full WhatsApp-style conversation transcript.
+- [x] Flows list (`/dashboard/flows`): name, active/inactive, version, step count.
+- [x] Dashboard nav to Connections / Leads / Flows; KPI cards already live.
+- [x] Demo-data seed (`packages/db/prisma/demo-leads.ts`) so the CRM is populated pre-pairing.
+- **Verified live** on https://wabot.miltech.cloud (leads list, lead detail + transcript, flows all 200 + rendering real data).
+- Still to do (Phase 3.1, later): assign-owner/add-tag/notes UI, conversations list view, completion-rate KPIs.
+- **Exit:** ✅ the business can browse leads, read transcripts, and see flows from the dashboard.
 
 ### Phase 4 — Scheduling (book the call) → **MVP complete**
 - `packages/scheduling`: availability rules → open slots (minus existing appointments).

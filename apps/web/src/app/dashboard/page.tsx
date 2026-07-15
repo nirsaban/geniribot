@@ -56,12 +56,24 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <nav className="mt-6">
+      <nav className="mt-6 flex flex-wrap gap-3">
         <Link
           href="/dashboard/connections"
           className="inline-block rounded-lg bg-brand px-5 py-2 font-semibold text-white hover:bg-brand-dark"
         >
           {he.connections} →
+        </Link>
+        <Link
+          href="/dashboard/leads"
+          className="inline-block rounded-lg border border-gray-300 px-5 py-2 font-semibold text-gray-700 hover:bg-gray-100"
+        >
+          {he.leads} →
+        </Link>
+        <Link
+          href="/dashboard/flows"
+          className="inline-block rounded-lg border border-gray-300 px-5 py-2 font-semibold text-gray-700 hover:bg-gray-100"
+        >
+          {he.flows} →
         </Link>
       </nav>
 
