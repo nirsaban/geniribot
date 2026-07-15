@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     const { url } = await provider.createCheckout({
       plan,
       sumIls: PLANS[plan].priceIls,
-      description: `Kesher — מסלול ${PLANS[plan].name}`,
+      description: `GeniriBot — מסלול ${PLANS[plan].name}`,
       organizationId: orgId,
       successUrl: `${base}${withBase("/dashboard/billing?paid=1")}`,
       cancelUrl: `${base}${withBase("/dashboard/billing?cancelled=1")}`,

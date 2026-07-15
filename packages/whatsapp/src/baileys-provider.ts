@@ -121,7 +121,7 @@ export class BaileysProvider implements WhatsAppProvider {
       auth: { creds, keys: makeCacheableSignalKeyStore(keys, logger) },
       logger,
       ...(version ? { version } : {}),
-      browser: ["Kesher", "Chrome", "1.0.0"],
+      browser: ["GeniriBot", "Chrome", "1.0.0"],
       markOnlineOnConnect: false,
     });
 

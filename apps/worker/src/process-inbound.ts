@@ -347,7 +347,7 @@ async function syncCalendarEvent(appointmentId: string, ctx: Ctx): Promise<void>
   try {
     const { id } = await cal.createEvent({
       summary: `שיחת מכירה — ${ctx.contactName ?? ctx.to}`,
-      description: "נקבע דרך Kesher",
+      description: "נקבע דרך GeniriBot",
       startISO: appt.startsAt.toISOString(),
       endISO: appt.endsAt.toISOString(),
       timezone: "Asia/Jerusalem",

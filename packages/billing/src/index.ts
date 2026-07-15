@@ -3,7 +3,7 @@ export * from "./plans.js";
 import type { PlanId } from "./plans.js";
 
 /**
- * Payment provider abstraction. Kesher bills tenants via **Grow** (Israeli
+ * Payment provider abstraction. GeniriBot bills tenants via **Grow** (Israeli
  * payments, formerly Meshulam) — not Stripe. The provider is used only when the
  * tenant has configured their Grow credentials; otherwise billing degrades to a
  * "contact us / not configured" state.

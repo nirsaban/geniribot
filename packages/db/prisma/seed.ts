@@ -31,7 +31,7 @@ async function main() {
   const platform = await prisma.organization.upsert({
     where: { slug: "platform" },
     update: {},
-    create: { name: "Kesher Platform", slug: "platform", plan: "PRO" },
+    create: { name: "GeniriBot Platform", slug: "platform", plan: "PRO" },
   });
   await prisma.user.upsert({
     where: { email: "admin@kesher.local" },

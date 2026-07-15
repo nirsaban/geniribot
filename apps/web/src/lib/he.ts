@@ -209,7 +209,7 @@ export const he = {
   wizFinish: "סיום 🎉",
   wizStepOf: "שלב",
   wizOf: "מתוך",
-  wizWelcomeTitle: "ברוכים הבאים לקשר! 👋",
+  wizWelcomeTitle: "ברוכים הבאים ל-GeniriBot! 👋",
   wizWelcomeBody: "3 דקות הקמה והבוט שלך יתחיל לאסוף לידים ולקבוע פגישות בוואטסאפ. אפשר לדלג על כל שלב ולחזור אליו אחר כך.",
   wizStart: "בואו נתחיל →",
   wizWhatsappTitle: "חברו מספר וואטסאפ",
