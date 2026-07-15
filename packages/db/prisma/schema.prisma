@@ -29,6 +29,7 @@ model Organization {
   calendarLinks CalendarIntegration[]
   secrets       Secret[]
   onboardedAt   DateTime?
+  calcomLink    String?
 }
 
 // Encrypted per-tenant secrets (e.g. Grow payment API keys). Values are stored
@@ -126,6 +127,8 @@ model Contact {
   fields         Json     @default("{}")
   tags           String[] @default([])
   ownerUserId    String?
+  /** Name of the flow/scenario that first engaged this lead (null = just an inbound msg). */
+  source         String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -81,6 +81,12 @@ export async function processInbound(job: InboundJob): Promise<void> {
     });
   }
 
+  // Mark the lead's source = the scenario that first engaged them (distinguishes
+  // real scenario leads from plain inbound messages).
+  if (!contact.source) {
+    await prisma.contact.update({ where: { id: contact.id }, data: { source: flowRow.name } });
+  }
+
   await prisma.message.create({
     data: { conversationId: convo.id, direction: "IN", body: text },
   });
@@ -200,6 +206,19 @@ async function applyAndPersist(flow: FlowDefinition, result: StepResult, ctx: Ct
     } else if (action.kind === "save_field") {
       savedFields[action.field] = action.value;
     } else if (action.kind === "book_appointment") {
+      // If the tenant uses their own Cal.com link, send it and continue (no
+      // in-chat slot picking). Otherwise offer available times in-chat.
+      const org = await prisma.organization.findUnique({
+        where: { id: ctx.organizationId },
+        select: { calcomLink: true },
+      });
+      if (org?.calcomLink) {
+        await sendOut(`אשמח לקבוע פגישה! קבע/י מועד שנוח לך כאן 👇\n${org.calcomLink}`, ctx);
+        const resumed = resumeBooking(flow, finalState);
+        for (const a of resumed.actions) if (a.kind === "send_message") await sendOut(a.text, ctx);
+        finalState = resumed.state;
+        continue;
+      }
       const slots = await offerSlots(ctx.organizationId);
       if (slots.length > 0) {
         await sendOut(slotMenu(slots), ctx);

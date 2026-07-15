@@ -22,17 +22,22 @@ export function AuthForm({ mode, action }: { mode: "login" | "register"; action:
   const err = messageFor(state?.error);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-brand/5 to-canvas p-4">
-      <div className="w-full max-w-sm">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden mesh-bg p-4">
+      {/* floating 3D blobs */}
+      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 animate-blob rounded-full bg-brand/20 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 animate-blob rounded-full bg-blue-400/20 blur-3xl" style={{ animationDelay: "3s" }} />
+      <div className="pointer-events-none absolute left-1/3 top-1/4 h-56 w-56 animate-blob rounded-full bg-violet-400/15 blur-3xl" style={{ animationDelay: "6s" }} />
+
+      <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-brand text-2xl text-white shadow-card">
-            ק
+          <span className="logo-3d mb-4 grid h-16 w-16 animate-float place-items-center rounded-2xl text-3xl font-black text-white">
+            G
           </span>
-          <h1 className="text-2xl font-extrabold text-ink">{he.appName}</h1>
-          <p className="mt-1 text-sm text-slate-500">{he.tagline}</p>
+          <h1 className="gradient-text text-3xl font-black">{he.appName}</h1>
+          <p className="mt-1.5 text-sm text-slate-500">{he.tagline}</p>
         </div>
 
-        <div className="card p-7">
+        <div className="card animate-pop p-7 backdrop-blur">
           <h2 className="mb-5 text-lg font-bold text-ink">{isRegister ? he.registerCta : he.loginCta}</h2>
           <form action={formAction} className="space-y-4">
             {isRegister && (

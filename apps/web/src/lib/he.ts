@@ -3,8 +3,8 @@
  * No hardcoded strings in components — add keys here.
  */
 export const he = {
-  appName: "קשר",
-  tagline: "בוט וואטסאפ שאוסף לידים וקובע פגישות מכירה",
+  appName: "GeniriBot",
+  tagline: "בוט וואטסאפ חכם שאוסף לידים וקובע פגישות — אוטומטית",
 
   // auth
   login: "התחברות",
@@ -121,6 +121,11 @@ export const he = {
   colTags: "תגיות",
   colCreated: "נוצר",
   colFields: "תשובות",
+  colSource: "מקור",
+  sourceScenario: "מתסריט",
+  sourceNone: "הודעה בלבד",
+  filterScenarioOnly: "רק לידים מתסריט",
+  filterAll: "הכול",
   backToLeads: "→ חזרה ללידים",
   leadDetails: "פרטי ליד",
   collectedFields: "תשובות שנאספו",
@@ -196,6 +201,36 @@ export const he = {
   obFlow2: "הבוט מזהה טריגר ומתחיל תסריט",
   obFlow3: "הבוט אוסף תשובות וקובע פגישה",
   obFlow4: "הכול מופיע מסודר בלוח הבקרה שלך",
+
+  // onboarding wizard
+  wizNext: "הבא",
+  wizBack: "הקודם",
+  wizSkip: "דלג/י",
+  wizFinish: "סיום 🎉",
+  wizStepOf: "שלב",
+  wizOf: "מתוך",
+  wizWelcomeTitle: "ברוכים הבאים לקשר! 👋",
+  wizWelcomeBody: "3 דקות הקמה והבוט שלך יתחיל לאסוף לידים ולקבוע פגישות בוואטסאפ. אפשר לדלג על כל שלב ולחזור אליו אחר כך.",
+  wizStart: "בואו נתחיל →",
+  wizWhatsappTitle: "חברו מספר וואטסאפ",
+  wizWhatsappBody: "המספר שדרכו לקוחות כותבים אליכם. לחצו לחיבור וסרקו את ה-QR.",
+  wizWhatsappCta: "לחיבור המספר",
+  wizWhatsappDone: "מספר מחובר ✅",
+  wizAvailTitle: "שעות פעילות לפגישות",
+  wizAvailBody: "הבוט יציע ללקוחות מועדים פנויים לפי הזמינות שלכם (ברירת מחדל: א׳–ה׳ 09:00–17:00). אפשר לשנות בהמשך.",
+  wizCalTitle: "איך לקבוע פגישות?",
+  wizCalBody: "בחרו איך הבוט יקבע פגישות עם לקוחות.",
+  wizCalInChat: "מועדים בתוך הצ׳אט (לפי שעות הפעילות)",
+  wizCalInChatDesc: "הבוט מציע מספרים לבחירה וקובע ישירות בשיחה.",
+  wizCalGoogle: "סנכרון יומן Google",
+  wizCalGoogleDesc: "פגישות נוצרות אוטומטית ביומן, שעות תפוסות נחסמות.",
+  wizCalCalcom: "קישור Cal.com משלכם",
+  wizCalCalcomDesc: "הדביקו את קישור ההזמנה שלכם מ-Cal.com — הבוט ישלח אותו ללקוח.",
+  calcomLinkLabel: "קישור Cal.com",
+  calcomLinkPlaceholder: "https://cal.com/your-name/30min",
+  calcomSaved: "הקישור נשמר ✅",
+  wizDoneTitle: "הכול מוכן! 🚀",
+  wizDoneBody: "הבוט שלכם מוכן. שלחו הודעת בדיקה למספר המחובר כדי לראות אותו בפעולה.",
 
   // flows
   flowsTitle: "בוטים (תסריטים)",

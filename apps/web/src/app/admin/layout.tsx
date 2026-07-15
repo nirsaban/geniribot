@@ -19,8 +19,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="sticky top-0 z-10 border-b border-line bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
           <div className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-600 text-white">🛡️</span>
-            <span className="font-extrabold text-ink">{he.appName} · {he.adminPanel}</span>
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-600 text-white shadow-lg">🛡️</span>
+            <span className="font-black text-ink"><span className="gradient-text">{he.appName}</span> · {he.adminPanel}</span>
           </div>
           <div className="flex items-center gap-4 text-sm">
             <Link href="/dashboard" className="text-slate-500 hover:text-ink">{he.backToApp}</Link>

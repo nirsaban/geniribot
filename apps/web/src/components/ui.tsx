@@ -11,7 +11,7 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-start justify-between gap-3 animate-fade-up">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
@@ -22,7 +22,7 @@ export function PageHeader({
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`card-p ${className}`}>{children}</div>;
+  return <div className={`card-p animate-fade-up ${className}`}>{children}</div>;
 }
 
 export function Stat({
@@ -45,7 +45,7 @@ export function Stat({
     green: "bg-emerald-50 text-emerald-700",
   };
   return (
-    <div className="card p-5">
+    <div className="card lift animate-pop p-5">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-slate-500">{label}</span>
         {icon && <span className={`rounded-lg p-1.5 text-lg ${accents[accent]}`}>{icon}</span>}

@@ -41,7 +41,7 @@ export async function registerAction(
   });
 
   await createSession({ sub: user.id, org: user.organizationId, role: "OWNER" });
-  redirect("/dashboard");
+  redirect("/dashboard/onboarding");
 }
 
 export async function loginAction(

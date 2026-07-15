@@ -23,10 +23,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-screen">
       {/* Sidebar (right side in RTL) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-line bg-white md:flex">
-        <div className="flex items-center gap-2 px-5 py-5">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-lg text-white">ק</span>
+        <div className="flex items-center gap-2.5 px-5 py-5">
+          <span className="logo-3d grid h-10 w-10 place-items-center rounded-xl text-lg font-black text-white">G</span>
           <div>
-            <div className="text-base font-extrabold leading-none text-ink">{he.appName}</div>
+            <div className="gradient-text text-base font-black leading-none">{he.appName}</div>
             <div className="mt-0.5 text-[11px] text-slate-400">{org?.name}</div>
           </div>
         </div>

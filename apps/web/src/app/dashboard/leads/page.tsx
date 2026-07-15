@@ -20,16 +20,21 @@ function fieldsSummary(fields: unknown): string {
     .join(" · ");
 }
 
-export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; scenario?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { q } = await searchParams;
+  const { q, scenario } = await searchParams;
 
   const where: Prisma.ContactWhereInput = { organizationId: session.org };
   if (q?.trim()) {
     const term = q.trim();
     where.OR = [{ name: { contains: term, mode: "insensitive" } }, { phone: { contains: term } }];
   }
+  if (scenario === "1") where.source = { not: null };
 
   const contacts = await prisma.contact.findMany({ where, orderBy: { createdAt: "desc" }, take: 200 });
 
@@ -37,8 +42,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title={he.leadsTitle} subtitle={he.leadsSubtitle} />
 
-      <form className="mb-5">
-        <input name="q" defaultValue={q ?? ""} placeholder={he.searchLeads} className="input max-w-sm" />
+      <form className="mb-5 flex flex-wrap items-center gap-2">
+        <input name="q" defaultValue={q ?? ""} placeholder={he.searchLeads} className="input max-w-xs" />
+        <div className="flex rounded-xl border border-line bg-white p-0.5 text-sm">
+          <a href="?" className={`rounded-lg px-3 py-1.5 ${scenario !== "1" ? "bg-brand text-white" : "text-slate-500"}`}>{he.filterAll}</a>
+          <a href="?scenario=1" className={`rounded-lg px-3 py-1.5 ${scenario === "1" ? "bg-brand text-white" : "text-slate-500"}`}>{he.filterScenarioOnly}</a>
+        </div>
       </form>
 
       {contacts.length === 0 ? (
@@ -51,6 +60,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 <tr>
                   <th className="p-3 font-medium">{he.colName}</th>
                   <th className="p-3 font-medium">{he.colPhone}</th>
+                  <th className="p-3 font-medium">{he.colSource}</th>
                   <th className="p-3 font-medium">{he.colTags}</th>
                   <th className="p-3 font-medium">{he.colFields}</th>
                   <th className="p-3 font-medium">{he.colCreated}</th>
@@ -68,6 +78,13 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                       </Link>
                     </td>
                     <td className="p-3 text-slate-500" dir="ltr">{c.phone}</td>
+                    <td className="p-3">
+                      {c.source ? (
+                        <span className="badge-brand" title={c.source}>⚡ {c.source.slice(0, 16)}</span>
+                      ) : (
+                        <span className="badge-gray">{he.sourceNone}</span>
+                      )}
+                    </td>
                     <td className="p-3">
                       <div className="flex flex-wrap gap-1">
                         {c.tags.map((t) => <span key={t} className="badge-gray">{t}</span>)}

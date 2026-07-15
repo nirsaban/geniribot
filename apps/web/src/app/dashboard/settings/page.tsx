@@ -5,6 +5,7 @@ import { withBase } from "@/lib/basePath";
 import { googleConfigured } from "@/lib/google";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
+import { saveCalcomLinkAction } from "../onboarding/actions";
 import { disconnectGoogleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,10 @@ export default async function SettingsPage({
 
   const integration = await prisma.calendarIntegration.findFirst({
     where: { organizationId: session.org, userId: session.sub, provider: "google" },
+  });
+  const org = await prisma.organization.findUnique({
+    where: { id: session.org },
+    select: { calcomLink: true },
   });
   const configured = googleConfigured();
 
@@ -58,6 +63,15 @@ export default async function SettingsPage({
           {configured && integration && (
             <div className="mt-3 badge-green">{he.googleConnected}</div>
           )}
+        </Card>
+
+        <Card>
+          <h2 className="flex items-center gap-2 font-semibold text-ink">🔗 {he.wizCalCalcom}</h2>
+          <p className="mb-3 mt-1 text-sm text-slate-500">{he.wizCalCalcomDesc}</p>
+          <form action={saveCalcomLinkAction} className="flex gap-2">
+            <input name="calcom" defaultValue={org?.calcomLink ?? ""} dir="ltr" placeholder={he.calcomLinkPlaceholder} className="input text-left" />
+            <button className="btn-primary shrink-0">{he.saveSecret}</button>
+          </form>
         </Card>
 
         <Card>
