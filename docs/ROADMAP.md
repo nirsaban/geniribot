@@ -74,11 +74,14 @@ scale & polish.
 - **Verified live:** trigger routing (keyword→support, else→catch-all), secret encrypt/decrypt round-trip, billing/onboarding/settings pages render. 17/17 typecheck, 23/23 tests.
 - Still to do: team invites + RBAC UI, usage metering/audit log, Grow webhook signature verify (needs a merchant account), marketing/landing.
 
-### Phase 8 — Scale & hardening
-- **Official WhatsApp Cloud API provider** (the strategic upgrade off Baileys' ban risk).
-- Shard WhatsApp sessions across multiple gateway instances (consistent hashing by connectionId).
-- Postgres RLS as defense-in-depth; secrets encryption review; Sentry + metrics dashboards; load tests.
-- Optional: more channels (Instagram/Telegram) via the same provider interface; webhooks/Zapier; public API.
+### Phase 8 — Scale & hardening — ✅ CORE DONE (2026-07-15)
+- [x] **Official WhatsApp Cloud API provider** (`CloudApiProvider` in `@kesher/whatsapp`): send via Meta Graph API + `parseCloudWebhook` (unit-tested). Drops in behind the same `WhatsAppProvider` interface as Baileys — ADR-001 payoff.
+- [x] Public webhook in the web app (`/api/webhooks/whatsapp`): GET verify handshake + POST ingest → enqueues on the SAME `wa-inbound` queue → worker → flow engine. **Verified end-to-end: a Meta webhook payload produced the bot's replies with zero runtime changes.**
+- [x] Gateway manager routes sends per connection provider (baileys socket vs cloud_api REST); Cloud connections are stateless (no resume). Per-connection Cloud config (phone-number id + verify token + encrypted access token) stored in `authState`.
+- [x] Connections UI offers both providers; Cloud form + webhook URL / verify-token display; access token encrypted at rest.
+- Still to do (true scale): shard gateway sessions across instances (consistent hashing by connectionId), Postgres RLS defense-in-depth, Sentry + metrics, load tests; extra channels (Instagram/Telegram) via the same interface; public API/Zapier.
+
+**Phases 0–8 core all shipped. Live at https://wabot.miltech.cloud.**
 
 ## Immediate next step
 Approve/adjust the plan, then I scaffold **Phase 0** (monorepo + db + auth + docker-compose)

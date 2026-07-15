@@ -1,7 +1,9 @@
-import { childLogger } from "@kesher/core";
+import { childLogger, decryptSecret, loadEnv, secretsKey } from "@kesher/core";
 import { prisma } from "@kesher/db";
 import {
   BaileysProvider,
+  CloudApiProvider,
+  type CloudApiConfig,
   type ConnectionStatus,
   type InboundMessage,
   type ProviderHandlers,
@@ -29,6 +31,7 @@ const STATUS_TO_DB: Record<ConnectionStatus, "PENDING" | "QR" | "CONNECTED" | "D
  */
 export class SessionManager {
   private readonly provider: BaileysProvider;
+  private readonly cloud: CloudApiProvider;
   private readonly orgIds = new Map<string, string>();
   private readonly liveState = new Map<string, { status: ConnectionStatus; qr?: string }>();
 
@@ -39,12 +42,14 @@ export class SessionManager {
       onStatus: (evt) => this.onStatus(evt),
     };
     this.provider = new BaileysProvider(new PrismaAuthStore(), handlers);
+    this.cloud = new CloudApiProvider((id) => this.loadCloudConfig(id));
   }
 
-  /** Reconnect connections that were previously paired, on gateway boot. */
+  /** Reconnect Baileys connections that were previously paired, on boot.
+   *  Cloud API connections are stateless — nothing to resume. */
   async resumeAll(): Promise<void> {
     const rows = await prisma.whatsAppConnection.findMany({
-      where: { status: { in: ["CONNECTED", "QR", "DISCONNECTED"] } },
+      where: { provider: "baileys", status: { in: ["CONNECTED", "QR", "DISCONNECTED"] } },
       select: { id: true, organizationId: true },
     });
     log.info({ count: rows.length }, "resuming connections");
@@ -58,21 +63,61 @@ export class SessionManager {
 
   async connect(connectionId: string, organizationId: string): Promise<void> {
     this.orgIds.set(connectionId, organizationId);
+    // Cloud API connections have no socket — they're "connected" once configured.
+    if (await this.isCloud(connectionId)) {
+      this.liveState.set(connectionId, { status: "connected" });
+      await this.onStatus({ connectionId, status: "connected" });
+      return;
+    }
     this.liveState.set(connectionId, { status: "pending" });
     await this.provider.connect(connectionId);
   }
 
   async disconnect(connectionId: string): Promise<void> {
+    if (await this.isCloud(connectionId)) {
+      await this.onStatus({ connectionId, status: "disconnected" });
+      return;
+    }
     await this.provider.disconnect(connectionId);
   }
 
   async logout(connectionId: string): Promise<void> {
-    await this.provider.logout(connectionId);
+    if (!(await this.isCloud(connectionId))) await this.provider.logout(connectionId);
+    else await this.onStatus({ connectionId, status: "logged_out" });
     this.liveState.delete(connectionId);
   }
 
   async send(connectionId: string, to: string, text: string): Promise<void> {
+    if (await this.isCloud(connectionId)) {
+      await this.cloud.send({ connectionId, to, text });
+      return;
+    }
     await this.provider.send({ connectionId, to, text });
+  }
+
+  private async isCloud(connectionId: string): Promise<boolean> {
+    const c = await prisma.whatsAppConnection.findUnique({
+      where: { id: connectionId },
+      select: { provider: true },
+    });
+    return c?.provider === "cloud_api";
+  }
+
+  /** Decrypt a Cloud API connection's config from its authState blob. */
+  private async loadCloudConfig(connectionId: string): Promise<CloudApiConfig | null> {
+    const c = await prisma.whatsAppConnection.findUnique({
+      where: { id: connectionId },
+      select: { authState: true },
+    });
+    const blob = c?.authState as { phoneNumberId?: string; accessTokenEnc?: string } | null;
+    if (!blob?.phoneNumberId || !blob.accessTokenEnc) return null;
+    const env = loadEnv();
+    try {
+      const accessToken = decryptSecret(blob.accessTokenEnc, secretsKey(env.SECRETS_KEY, env.JWT_SECRET));
+      return { phoneNumberId: blob.phoneNumberId, accessToken };
+    } catch {
+      return null;
+    }
   }
 
   /** Live status + QR for the dashboard to poll. */

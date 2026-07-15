@@ -8,8 +8,8 @@ const nextConfig = {
   ...(basePath ? { basePath } : {}),
   // Workspace packages ship raw TS; let Next transpile them.
   transpilePackages: ["@kesher/core", "@kesher/db"],
-  // Keep native deps external so their prebuilt binaries load at runtime.
-  serverExternalPackages: ["argon2", "@prisma/client"],
+  // Keep native/server deps external so they load at runtime (not webpack-bundled).
+  serverExternalPackages: ["argon2", "@prisma/client", "bullmq", "ioredis"],
   webpack: (config, { isServer }) => {
     if (isServer) {
       // argon2 is pulled transitively via the transpiled @kesher/core package,

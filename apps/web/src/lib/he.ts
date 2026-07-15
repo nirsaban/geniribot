@@ -52,6 +52,18 @@ export const he = {
     LOGGED_OUT: "נותק מהמכשיר",
   },
 
+  // cloud api (official WhatsApp)
+  providerBaileys: "חיבור מהיר (QR)",
+  providerCloud: "WhatsApp רשמי (Cloud API)",
+  cloudDesc: "החיבור הרשמי של Meta — יציב ומאושר לשימוש עסקי בקנה מידה. דורש חשבון WhatsApp Business.",
+  cloudPhoneId: "Phone Number ID",
+  cloudToken: "Access Token (מוצפן)",
+  cloudVerify: "Verify Token (אופציונלי — ייווצר אוטומטית)",
+  cloudCreate: "חבר Cloud API",
+  cloudWebhookTitle: "כתובת Webhook להגדרה ב-Meta",
+  cloudWebhookHint: "הדבק/י את הכתובת הזו + ה-Verify Token בהגדרות ה-Webhook של אפליקציית ה-Meta שלך.",
+  cloudViaLabel: "רשמי (Cloud API)",
+
   // leads / CRM
   leadsTitle: "לידים",
   leadsSubtitle: "כל מי שכתב לבוט — עם התשובות שנאספו",
