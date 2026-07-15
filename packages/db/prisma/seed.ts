@@ -27,6 +27,25 @@ async function main() {
     },
   });
 
+  // Platform org + super admin (controls all tenants, billing, plan unlocks).
+  const platform = await prisma.organization.upsert({
+    where: { slug: "platform" },
+    update: {},
+    create: { name: "Kesher Platform", slug: "platform", plan: "PRO" },
+  });
+  await prisma.user.upsert({
+    where: { email: "admin@kesher.local" },
+    update: { isSuperAdmin: true },
+    create: {
+      organizationId: platform.id,
+      email: "admin@kesher.local",
+      name: "Super Admin",
+      role: "OWNER",
+      isSuperAdmin: true,
+      passwordHash: await argon2.hash("admin1234"),
+    },
+  });
+
   await prisma.flow.upsert({
     where: { id: "seed-flow" },
     update: {},

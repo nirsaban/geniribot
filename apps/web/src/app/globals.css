@@ -2,10 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand: #0d9488;
+  --brand-dark: #0f766e;
+  --brand-light: #14b8a6;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --canvas: #f6f8fa;
+  --line: #e5e9ef;
+}
+
 html {
   direction: rtl;
 }
 
 body {
-  font-family: system-ui, "Segoe UI", Arial, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer components {
+  /* Cards */
+  .card {
+    @apply rounded-2xl border border-line bg-white shadow-soft;
+  }
+  .card-p {
+    @apply card p-5;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition;
+    @apply focus:outline-none focus:ring-2 focus:ring-brand/30;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-dark disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply btn border border-line bg-white text-slate-700 hover:bg-slate-50;
+  }
+  .btn-ghost {
+    @apply btn text-slate-600 hover:bg-slate-100;
+  }
+  .btn-danger {
+    @apply btn border border-red-200 bg-white text-red-600 hover:bg-red-50;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* Inputs */
+  .input {
+    @apply w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition;
+    @apply placeholder:text-slate-400 focus:border-brand focus:ring-2 focus:ring-brand/20;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-slate-700;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-brand {
+    @apply badge bg-brand/10 text-brand-dark;
+  }
+  .badge-gray {
+    @apply badge bg-slate-100 text-slate-600;
+  }
+  .badge-green {
+    @apply badge bg-emerald-50 text-emerald-700;
+  }
+  .badge-amber {
+    @apply badge bg-amber-50 text-amber-700;
+  }
+  .badge-red {
+    @apply badge bg-red-50 text-red-600;
+  }
+}
+
+/* Subtle scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }

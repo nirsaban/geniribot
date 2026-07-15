@@ -15,7 +15,7 @@ describe("sessions", () => {
   it("round-trips claims", async () => {
     const token = await signSession({ sub: "u1", org: "o1", role: "ADMIN" }, SECRET);
     const claims = await verifySession(token, SECRET);
-    expect(claims).toEqual({ sub: "u1", org: "o1", role: "ADMIN" });
+    expect(claims).toEqual({ sub: "u1", org: "o1", role: "ADMIN", sa: false });
   });
 
   it("rejects a bad secret", async () => {

@@ -1,19 +1,22 @@
 import { he } from "@/lib/he";
-import { removeGrowSecretsAction, saveGrowSecretsAction } from "./actions";
 
 /**
  * Secure "paste your Grow keys" form. Renders masked status of already-saved
  * secrets (never the real value) and inputs to set/replace them. Server actions
- * encrypt on save.
+ * (passed in) encrypt on save. Used by the super-admin panel (platform creds).
  */
 export function GrowSecrets({
   pageCodeMask,
   userIdMask,
   apiKeyMask,
+  saveAction,
+  removeAction,
 }: {
   pageCodeMask: string | null;
   userIdMask: string | null;
   apiKeyMask: string | null;
+  saveAction: (formData: FormData) => Promise<void>;
+  removeAction: () => Promise<void>;
 }) {
   const status = (m: string | null) =>
     m ? (
@@ -35,7 +38,7 @@ export function GrowSecrets({
         </ol>
       </details>
 
-      <form action={saveGrowSecretsAction} className="space-y-3">
+      <form action={saveAction} className="space-y-3">
         <Field label={he.growPageCode} name="page_code" status={status(pageCodeMask)} />
         <Field label={he.growUserId} name="user_id" status={status(userIdMask)} />
         <Field label={he.growApiKey} name="api_key" status={status(apiKeyMask)} />
@@ -47,7 +50,7 @@ export function GrowSecrets({
       </form>
 
       {(pageCodeMask || userIdMask || apiKeyMask) && (
-        <form action={removeGrowSecretsAction} className="mt-2">
+        <form action={removeAction} className="mt-2">
           <button className="text-xs text-red-600 hover:underline">{he.removeSecret}</button>
         </form>
       )}

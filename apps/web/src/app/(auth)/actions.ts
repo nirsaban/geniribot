@@ -56,6 +56,11 @@ export async function loginAction(
     return { error: "authError" };
   }
 
-  await createSession({ sub: user.id, org: user.organizationId, role: user.role });
-  redirect("/dashboard");
+  await createSession({
+    sub: user.id,
+    org: user.organizationId,
+    role: user.role,
+    sa: user.isSuperAdmin,
+  });
+  redirect(user.isSuperAdmin ? "/admin" : "/dashboard");
 }

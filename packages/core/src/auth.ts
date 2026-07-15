@@ -9,6 +9,7 @@ export interface SessionClaims {
   sub: string; // userId
   org: string; // organizationId
   role: Role;
+  sa?: boolean; // platform super-admin
 }
 
 const ALG = "HS256";
@@ -33,7 +34,7 @@ export async function signSession(
   secret: string,
   ttl: string = DEFAULT_TTL,
 ): Promise<string> {
-  return new SignJWT({ org: claims.org, role: claims.role })
+  return new SignJWT({ org: claims.org, role: claims.role, sa: claims.sa ?? false })
     .setProtectedHeader({ alg: ALG })
     .setSubject(claims.sub)
     .setIssuedAt()
@@ -52,7 +53,12 @@ export async function verifySession(
       typeof payload.org === "string" &&
       typeof payload.role === "string"
     ) {
-      return { sub: payload.sub, org: payload.org, role: payload.role as Role };
+      return {
+        sub: payload.sub,
+        org: payload.org,
+        role: payload.role as Role,
+        sa: payload.sa === true,
+      };
     }
     return null;
   } catch {

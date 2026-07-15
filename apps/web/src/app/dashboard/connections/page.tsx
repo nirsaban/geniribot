@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { withBase } from "@/lib/basePath";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
@@ -27,53 +27,39 @@ export default async function ConnectionsPage() {
   const webhookUrl = `${origin}${withBase("/api/webhooks/whatsapp")}`;
 
   return (
-    <div className="mx-auto max-w-3xl p-8">
-      <Link href="/dashboard" className="text-sm text-brand">
-        {he.backToDashboard}
-      </Link>
-      <h1 className="mt-2 text-2xl font-bold text-brand-dark">{he.connectionsTitle}</h1>
-      <p className="mb-6 text-sm text-gray-500">{he.connectionsSubtitle}</p>
+    <>
+      <PageHeader title={he.connectionsTitle} subtitle={he.connectionsSubtitle} />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         {/* Baileys (QR) */}
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="font-semibold">{he.providerBaileys}</h2>
+        <div className="card-p">
+          <h2 className="flex items-center gap-2 font-semibold text-ink">⚡ {he.providerBaileys}</h2>
           <form action={createConnectionAction} className="mt-3 flex gap-2">
-            <input
-              name="label"
-              placeholder={he.connectionLabel}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-brand"
-            />
-            <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark">
-              {he.create}
-            </button>
+            <input name="label" placeholder={he.connectionLabel} className="input" />
+            <button className="btn-primary shrink-0">{he.create}</button>
           </form>
         </div>
 
         {/* Cloud API (official) */}
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="font-semibold">{he.providerCloud}</h2>
-          <p className="mb-3 mt-1 text-xs text-gray-500">{he.cloudDesc}</p>
+        <div className="card-p">
+          <h2 className="flex items-center gap-2 font-semibold text-ink">✅ {he.providerCloud}</h2>
+          <p className="mb-3 mt-1 text-xs text-slate-500">{he.cloudDesc}</p>
           <form action={createCloudConnectionAction} className="space-y-2">
-            <input name="label" placeholder={he.connectionLabel} className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-brand" />
-            <input name="phone_number_id" placeholder={he.cloudPhoneId} dir="ltr" className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-left text-sm outline-none focus:border-brand" />
-            <input name="access_token" type="password" placeholder={he.cloudToken} dir="ltr" autoComplete="off" className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-left text-sm outline-none focus:border-brand" />
-            <input name="verify_token" placeholder={he.cloudVerify} dir="ltr" className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-left text-sm outline-none focus:border-brand" />
-            <button className="w-full rounded-lg bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:bg-brand">
-              {he.cloudCreate}
-            </button>
+            <input name="label" placeholder={he.connectionLabel} className="input !py-2 text-sm" />
+            <input name="phone_number_id" placeholder={he.cloudPhoneId} dir="ltr" className="input !py-2 text-left text-sm" />
+            <input name="access_token" type="password" placeholder={he.cloudToken} dir="ltr" autoComplete="off" className="input !py-2 text-left text-sm" />
+            <input name="verify_token" placeholder={he.cloudVerify} dir="ltr" className="input !py-2 text-left text-sm" />
+            <button className="btn-primary w-full !bg-brand-dark">{he.cloudCreate}</button>
           </form>
-          <div className="mt-3 rounded-lg bg-gray-50 p-2 text-[11px]">
-            <div className="font-medium text-gray-600">{he.cloudWebhookTitle}</div>
-            <code dir="ltr" className="block break-all text-gray-500">{webhookUrl}</code>
+          <div className="mt-3 rounded-lg bg-slate-50 p-2 text-[11px]">
+            <div className="font-medium text-slate-600">{he.cloudWebhookTitle}</div>
+            <code dir="ltr" className="block break-all text-slate-500">{webhookUrl}</code>
           </div>
         </div>
       </div>
 
       {connections.length === 0 ? (
-        <p className="rounded-xl bg-white p-6 text-center text-sm text-gray-500 shadow-sm">
-          {he.noConnections}
-        </p>
+        <EmptyState icon="💬" title={he.noConnections} />
       ) : (
         <ul className="space-y-4">
           {connections.map((c) => {
@@ -135,6 +121,6 @@ export default async function ConnectionsPage() {
           })}
         </ul>
       )}
-    </div>
+    </>
   );
 }

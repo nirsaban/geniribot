@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PLANS, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
-import { growConfigForOrg } from "@/lib/billing";
+import { PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
 import { checkoutAction } from "./actions";
@@ -11,62 +10,63 @@ export const dynamic = "force-dynamic";
 
 const ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ paid?: string; pending?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/login");
+  const { paid, pending } = await searchParams;
 
   const org = await prisma.organization.findUnique({ where: { id: session.org } });
   if (!org) redirect("/login");
   const current = org.plan as PlanId;
-  const growReady = Boolean(await growConfigForOrg(session.org));
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
-      <Link href="/dashboard" className="text-sm text-brand">
-        {he.backToDashboard}
-      </Link>
-      <h1 className="mt-2 text-2xl font-bold text-brand-dark">{he.billingTitle}</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        {he.currentPlan}: <span className="font-medium text-brand">{PLANS[current].name}</span>
-      </p>
+    <>
+      <PageHeader
+        title={he.billingTitle}
+        subtitle={`${he.currentPlan}: ${PLANS[current].name}`}
+      />
 
-      {!growReady && (
-        <p className="mb-6 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
-          {he.growNotConfigured}{" "}
-          <Link href="/dashboard/onboarding" className="font-medium underline">
-            {he.goToOnboarding}
-          </Link>
-        </p>
-      )}
+      {paid && <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">התשלום התקבל, המסלול עודכן ✅</div>}
+      {pending && <div className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">בקשת השדרוג התקבלה. נציג יאשר את המנוי בקרוב 🙌</div>}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-3">
         {ORDER.map((id) => {
           const plan = PLANS[id];
           const isCurrent = id === current;
+          const featured = id === "STARTER";
           return (
             <div
               key={id}
-              className={`rounded-2xl bg-white p-6 shadow-sm ${isCurrent ? "ring-2 ring-brand" : ""}`}
+              className={`card relative flex flex-col p-6 ${featured ? "ring-2 ring-brand" : ""}`}
             >
-              <div className="text-lg font-bold text-brand-dark">{plan.name}</div>
-              <div className="mt-1 text-2xl font-bold">
-                {plan.priceIls === 0 ? he.free : `₪${plan.priceIls}`}
-                {plan.priceIls > 0 && <span className="text-sm font-normal text-gray-400"> / {he.perMonth}</span>}
+              {featured && (
+                <span className="absolute -top-3 right-6 badge-brand !bg-brand !text-white">הכי פופולרי</span>
+              )}
+              <div className="text-lg font-bold text-ink">{plan.name}</div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold text-ink">
+                  {plan.priceIls === 0 ? he.free : `₪${plan.priceIls}`}
+                </span>
+                {plan.priceIls > 0 && <span className="text-sm text-slate-400">/ {he.perMonth}</span>}
               </div>
-              <ul className="mt-4 space-y-1 text-sm text-gray-600">
+              <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-600">
                 {plan.features.map((f) => (
-                  <li key={f}>· {f}</li>
+                  <li key={f} className="flex items-center gap-2">
+                    <span className="text-brand">✓</span> {f}
+                  </li>
                 ))}
               </ul>
-              <div className="mt-5">
+              <div className="mt-6">
                 {isCurrent ? (
-                  <span className="inline-block rounded-lg bg-gray-100 px-4 py-2 text-sm text-gray-500">
-                    {he.currentPlan}
-                  </span>
+                  <span className="btn-secondary w-full cursor-default opacity-70">{he.currentPlan}</span>
                 ) : (
                   <form action={checkoutAction}>
                     <input type="hidden" name="plan" value={id} />
-                    <button className="w-full rounded-lg bg-brand py-2 text-sm font-semibold text-white hover:bg-brand-dark">
+                    <button className={`w-full ${featured ? "btn-primary" : "btn-secondary"}`}>
                       {id === "FREE" ? he.choosePlan : he.upgrade}
                     </button>
                   </form>
@@ -76,6 +76,6 @@ export default async function BillingPage() {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }

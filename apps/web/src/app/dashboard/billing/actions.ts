@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { PLANS, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { withBase } from "@/lib/basePath";
-import { growProviderForOrg } from "@/lib/billing";
+import { growPlatformProvider } from "@/lib/billing";
 import { getSession } from "@/lib/session";
 
 /**
@@ -24,9 +24,10 @@ export async function checkoutAction(formData: FormData): Promise<void> {
     redirect("/dashboard/billing");
   }
 
-  const provider = await growProviderForOrg(session.org);
+  const provider = await growPlatformProvider();
   if (!provider) {
-    redirect("/dashboard/onboarding?need=grow");
+    // Platform payments not set up yet — the super admin unlocks plans manually.
+    redirect("/dashboard/billing?pending=1");
   }
 
   const base = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";
