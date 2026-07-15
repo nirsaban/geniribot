@@ -15,6 +15,12 @@ function stepCount(def: unknown): number {
   return 0;
 }
 
+function triggerLabel(def: unknown): string {
+  const t = (def as { trigger?: { type?: string; keywords?: string[] } } | null)?.trigger;
+  if (t?.type === "keyword" && t.keywords?.length) return `מילות מפתח: ${t.keywords.join(", ")}`;
+  return "כל הודעה ראשונה";
+}
+
 export default async function FlowsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -55,6 +61,7 @@ export default async function FlowsPage() {
                 <div className="text-sm text-gray-500">
                   {he.colVersion} {f.version} · {stepCount(f.definition)} {he.colSteps}
                 </div>
+                <div className="mt-0.5 text-xs text-amber-700">⚡ {triggerLabel(f.definition)}</div>
               </div>
               <div className="flex items-center gap-2">
                 <span

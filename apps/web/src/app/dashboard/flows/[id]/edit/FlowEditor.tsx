@@ -34,9 +34,14 @@ interface AnyNode {
   action?: string;
   next?: string | null;
 }
+interface Trigger {
+  type: "any" | "keyword";
+  keywords?: string[];
+}
 interface Def {
   start: string;
   nodes: Record<string, AnyNode>;
+  trigger?: Trigger;
   _positions?: Record<string, XY>;
 }
 
@@ -110,8 +115,11 @@ export function FlowEditor({
   const [def, setDef] = useState<Def>(() => ({
     start: initial.start,
     nodes: initial.nodes,
+    trigger: initial.trigger ?? { type: "any" },
     _positions: initial._positions ?? {},
   }));
+  const trigger = def.trigger ?? { type: "any" };
+  const setTrigger = (t: Trigger) => setDef((d) => ({ ...d, trigger: t }));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -239,6 +247,44 @@ export function FlowEditor({
       </div>
 
       <aside className="w-72 shrink-0 space-y-3 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4">
+        {/* Trigger — the first thing you define: what starts this flow */}
+        <div className="rounded-xl bg-amber-50 p-3">
+          <div className="text-xs font-semibold text-amber-900">{he.triggerTitle}</div>
+          <p className="mb-2 mt-0.5 text-[11px] text-amber-700">{he.triggerDesc}</p>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="radio"
+              checked={trigger.type === "any"}
+              onChange={() => setTrigger({ type: "any" })}
+            />
+            {he.triggerAny}
+          </label>
+          <label className="mt-1 flex items-center gap-2 text-xs">
+            <input
+              type="radio"
+              checked={trigger.type === "keyword"}
+              onChange={() => setTrigger({ type: "keyword", keywords: trigger.keywords ?? [] })}
+            />
+            {he.triggerKeyword}
+          </label>
+          {trigger.type === "keyword" && (
+            <label className="mt-2 block text-xs">
+              <span className="text-amber-800">{he.triggerKeywordsLabel}</span>
+              <input
+                value={(trigger.keywords ?? []).join(", ")}
+                onChange={(e) =>
+                  setTrigger({
+                    type: "keyword",
+                    keywords: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                  })
+                }
+                placeholder={he.triggerKeywordsHint}
+                className="mt-1 w-full rounded border border-amber-300 p-1"
+              />
+            </label>
+          )}
+        </div>
+
         <div className="flex flex-wrap gap-1">
           {(["message", "question", "condition", "action"] as NodeKind[]).map((k) => (
             <button

@@ -2,12 +2,15 @@ import { childLogger } from "@kesher/core";
 import { prisma, type Prisma } from "@kesher/db";
 import {
   FlowDefinition,
+  matchesTrigger,
   resumeBooking,
   start,
   step,
+  triggerSpecificity,
   type FlowState,
   type StepResult,
 } from "@kesher/flow-engine";
+import type { Flow } from "@kesher/db";
 import { orgCalendar } from "./calendar.js";
 import { formatSlot, offerSlots, slotMenu } from "./booking.js";
 import {
@@ -36,23 +39,26 @@ export async function processInbound(job: InboundJob): Promise<void> {
     create: { organizationId, phone: from },
   });
 
-  const connection = await prisma.whatsAppConnection.findUnique({ where: { id: connectionId } });
-  const flowRow = connection?.defaultFlowId
-    ? await prisma.flow.findUnique({ where: { id: connection.defaultFlowId } })
-    : await prisma.flow.findFirst({
-        where: { organizationId, isActive: true },
-        orderBy: { createdAt: "asc" },
-      });
-  if (!flowRow) {
-    log.warn({ organizationId, connectionId }, "no active flow; ignoring message");
-    return;
-  }
-  const flow = FlowDefinition.parse(flowRow.definition);
-
+  // An existing active conversation continues its flow; a NEW one is matched to
+  // a flow by its trigger (what the lead sent). Every flow starts from inbound.
   let convo = await prisma.conversation.findFirst({
     where: { organizationId, contactId: contact.id, status: "ACTIVE" },
     orderBy: { lastMessageAt: "desc" },
   });
+
+  let flowRow: Flow | null = null;
+  if (convo?.flowId) {
+    flowRow = await prisma.flow.findUnique({ where: { id: convo.flowId } });
+  }
+  if (!flowRow) {
+    flowRow = await selectFlowByTrigger(organizationId, connectionId, text);
+  }
+  if (!flowRow) {
+    log.warn({ organizationId, connectionId }, "no matching flow; ignoring message");
+    return;
+  }
+  const flow = FlowDefinition.parse(flowRow.definition);
+
   if (!convo) {
     convo = await prisma.conversation.create({
       data: {
@@ -91,6 +97,45 @@ export async function processInbound(job: InboundJob): Promise<void> {
   const isFresh = !prevState || prevState.currentNodeId === undefined;
   const result = isFresh ? start(flow) : step(flow, normalizeState(prevState), { text });
   await applyAndPersist(flow, result, ctx);
+}
+
+/**
+ * Choose which active flow an inbound message starts, by matching triggers:
+ * a keyword trigger that matches wins; otherwise the connection's default flow;
+ * otherwise a catch-all ("any") flow. Returns null if the org has no flows.
+ */
+async function selectFlowByTrigger(
+  organizationId: string,
+  connectionId: string,
+  text: string,
+): Promise<Flow | null> {
+  const flows = await prisma.flow.findMany({
+    where: { organizationId, isActive: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (flows.length === 0) return null;
+
+  const parsed = flows
+    .map((f) => ({ f, def: FlowDefinition.safeParse(f.definition) }))
+    .filter((p) => p.def.success)
+    .map((p) => ({ f: p.f, trigger: p.def.data!.trigger }));
+
+  // 1) keyword trigger that matches the message (most specific)
+  const kw = parsed.find(
+    (p) => triggerSpecificity(p.trigger) === 1 && matchesTrigger(p.trigger, text),
+  );
+  if (kw) return kw.f;
+
+  // 2) the connection's configured default flow, if any
+  const conn = await prisma.whatsAppConnection.findUnique({ where: { id: connectionId } });
+  if (conn?.defaultFlowId) {
+    const d = parsed.find((p) => p.f.id === conn.defaultFlowId);
+    if (d) return d.f;
+  }
+
+  // 3) a catch-all ("any") flow, else the first active flow
+  const anyFlow = parsed.find((p) => triggerSpecificity(p.trigger) === 0);
+  return (anyFlow ?? parsed[0])?.f ?? null;
 }
 
 interface Ctx {

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { planLimits, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { gatewayConnect, gatewayLogout } from "@/lib/gateway";
 import { getSession } from "@/lib/session";
@@ -25,6 +26,14 @@ async function ownedConnection(org: string, id: string) {
 export async function createConnectionAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
   const label = String(formData.get("label") ?? "").trim() || "וואטסאפ";
+
+  // Enforce the plan's WhatsApp-connection limit.
+  const orgRow = await prisma.organization.findUnique({ where: { id: org }, select: { plan: true } });
+  const limit = planLimits((orgRow?.plan ?? "FREE") as PlanId).connections;
+  const existing = await prisma.whatsAppConnection.count({ where: { organizationId: org } });
+  if (existing >= limit) {
+    redirect("/dashboard/billing?limit=connections");
+  }
 
   // Attach the org's active flow as the default greeter, if any.
   const flow = await prisma.flow.findFirst({

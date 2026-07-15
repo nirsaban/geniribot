@@ -60,6 +60,7 @@ const TEMPLATES: Record<string, { name: string; definition: unknown }> = {
     name: "איסוף ליד + קביעת פגישה",
     definition: {
       start: "n1",
+      trigger: { type: "any" },
       nodes: {
         n1: { type: "message", text: "שלום! 👋 אני העוזר של העסק.", next: "n2" },
         n2: { type: "question", field: "name", prompt: "מה השם שלך?", expect: "text", next: "n3" },
@@ -91,6 +92,7 @@ const TEMPLATES: Record<string, { name: string; definition: unknown }> = {
     name: "תמיכה מהירה",
     definition: {
       start: "n1",
+      trigger: { type: "keyword", keywords: ["תמיכה", "בעיה", "עזרה"] },
       nodes: {
         n1: { type: "message", text: "שלום! נשמח לעזור 🙌", next: "n2" },
         n2: { type: "question", field: "issue", prompt: "מה הנושא?", expect: "text", next: "n3" },

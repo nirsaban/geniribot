@@ -60,11 +60,35 @@ export const FlowNode = z.discriminatedUnion("type", [
 ]);
 export type FlowNode = z.infer<typeof FlowNode>;
 
+/**
+ * What makes a lead's inbound message start this flow. "any" = catch-all
+ * (default greeter); "keyword" = start only when the message matches a keyword.
+ * Every flow begins from an inbound webhook event — the trigger defines which.
+ */
+export const FlowTrigger = z.object({
+  type: z.enum(["any", "keyword"]).default("any"),
+  keywords: z.array(z.string()).optional(),
+});
+export type FlowTrigger = z.infer<typeof FlowTrigger>;
+
 export const FlowDefinition = z.object({
   start: z.string(),
   nodes: z.record(FlowNode),
+  trigger: FlowTrigger.optional(),
 });
 export type FlowDefinition = z.infer<typeof FlowDefinition>;
+
+/** True if an inbound message should start a flow with this trigger. */
+export function matchesTrigger(trigger: FlowTrigger | undefined, text: string): boolean {
+  if (!trigger || trigger.type === "any") return true;
+  const t = text.trim().toLowerCase();
+  return (trigger.keywords ?? []).some((k) => k.trim() && t.includes(k.trim().toLowerCase()));
+}
+
+/** Keyword triggers are more specific than catch-all — used to rank matches. */
+export function triggerSpecificity(trigger: FlowTrigger | undefined): number {
+  return trigger && trigger.type === "keyword" ? 1 : 0;
+}
 
 /** Per-conversation persisted state (stored in Conversation.state). */
 export interface FlowState {

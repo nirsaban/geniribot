@@ -2,10 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
 import { withBase } from "@/lib/basePath";
+import { GROW_SECRETS } from "@/lib/billing";
 import { googleConfigured } from "@/lib/google";
 import { he } from "@/lib/he";
+import { secretMask } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
 import { disconnectGoogleAction } from "./actions";
+import { GrowSecrets } from "./GrowSecrets";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +25,11 @@ export default async function SettingsPage({
     where: { organizationId: session.org, userId: session.sub, provider: "google" },
   });
   const configured = googleConfigured();
+  const [pageCodeMask, userIdMask, apiKeyMask] = await Promise.all([
+    secretMask(session.org, GROW_SECRETS.pageCode),
+    secretMask(session.org, GROW_SECRETS.userId),
+    secretMask(session.org, GROW_SECRETS.apiKey),
+  ]);
 
   return (
     <div className="mx-auto max-w-2xl p-8">
@@ -69,6 +77,13 @@ export default async function SettingsPage({
       <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
         <h2 className="font-semibold">{he.remindersTitle}</h2>
         <p className="mt-1 text-sm text-gray-500">{he.remindersDesc}</p>
+      </section>
+
+      {/* Grow payment secrets (secure paste) */}
+      <section className="mt-4 rounded-2xl bg-white p-6 shadow-sm">
+        <h2 className="font-semibold">{he.secretsTitle}</h2>
+        <p className="mb-4 mt-1 text-sm text-gray-500">{he.secretsDesc}</p>
+        <GrowSecrets pageCodeMask={pageCodeMask} userIdMask={userIdMask} apiKeyMask={apiKeyMask} />
       </section>
     </div>
   );

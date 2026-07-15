@@ -87,6 +87,18 @@ export default async function DashboardPage() {
         >
           {he.settings} →
         </Link>
+        <Link
+          href="/dashboard/billing"
+          className="inline-block rounded-lg border border-gray-300 px-5 py-2 font-semibold text-gray-700 hover:bg-gray-100"
+        >
+          {he.billing} →
+        </Link>
+        <Link
+          href="/dashboard/onboarding"
+          className="inline-block rounded-lg border border-amber-300 bg-amber-50 px-5 py-2 font-semibold text-amber-800 hover:bg-amber-100"
+        >
+          {he.onboarding} →
+        </Link>
       </nav>
 
       <p className="mt-8 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">{he.phase0Note}</p>

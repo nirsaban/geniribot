@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evalCondition, resumeBooking, start, step } from "./step.js";
-import { FlowDefinition } from "./types.js";
+import { FlowDefinition, matchesTrigger, triggerSpecificity } from "./types.js";
 
 const flow = FlowDefinition.parse({
   start: "n1",
@@ -83,6 +83,23 @@ describe("validation & retries", () => {
     expect(r.state.currentNodeId).toBe("n3");
     expect(r.state.retries).toBe(1);
     expect(r.state.answers.service).toBeUndefined();
+  });
+});
+
+describe("triggers", () => {
+  it("matches any-trigger on any text", () => {
+    expect(matchesTrigger(undefined, "hi")).toBe(true);
+    expect(matchesTrigger({ type: "any" }, "whatever")).toBe(true);
+  });
+  it("matches keyword triggers case-insensitively by substring", () => {
+    const t = { type: "keyword" as const, keywords: ["מחיר", "פגישה"] };
+    expect(matchesTrigger(t, "כמה המחיר?")).toBe(true);
+    expect(matchesTrigger(t, "שלום")).toBe(false);
+  });
+  it("ranks keyword triggers above catch-all", () => {
+    expect(triggerSpecificity({ type: "keyword", keywords: ["x"] })).toBe(1);
+    expect(triggerSpecificity({ type: "any" })).toBe(0);
+    expect(triggerSpecificity(undefined)).toBe(0);
   });
 });
 

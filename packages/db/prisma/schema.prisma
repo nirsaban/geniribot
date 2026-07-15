@@ -27,6 +27,24 @@ model Organization {
   appointments  Appointment[]
   availability  AvailabilityRule[]
   calendarLinks CalendarIntegration[]
+  secrets       Secret[]
+  onboardedAt   DateTime?
+}
+
+// Encrypted per-tenant secrets (e.g. Grow payment API keys). Values are stored
+// AES-256-GCM encrypted; never returned to the client in plaintext.
+model Secret {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  valueEnc       String
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model User {

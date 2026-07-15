@@ -89,6 +89,49 @@ export const he = {
   remindersTitle: "תזכורות",
   remindersDesc: "לפני כל פגישה נשלחות ללקוח תזכורות אוטומטיות בוואטסאפ (24 שעות ושעה לפני).",
 
+  // billing / plans
+  billing: "מנוי ותשלום",
+  billingTitle: "בחירת מסלול",
+  currentPlan: "המסלול הנוכחי",
+  perMonth: "לחודש",
+  free: "חינם",
+  choosePlan: "בחר/י מסלול",
+  upgrade: "שדרג/י",
+  growNotConfigured: "כדי לגבות תשלום צריך קודם לחבר את חשבון Grow שלך (ראה/י אשף ההקמה).",
+  goToOnboarding: "לאשף ההקמה",
+
+  // secrets (secure paste)
+  secretsTitle: "מפתחות סודיים (Grow)",
+  secretsDesc: "המפתחות נשמרים מוצפנים בשרת (AES-256). לעולם לא נציג אותם שוב — רק 4 הספרות האחרונות.",
+  growPageCode: "קוד עמוד (Page Code)",
+  growUserId: "מזהה משתמש (User ID)",
+  growApiKey: "מפתח API (אופציונלי)",
+  saveSecret: "שמור מאובטח",
+  secretSaved: "נשמר מוצפן ✅",
+  secretSet: "מוגדר",
+  secretNotSet: "לא הוגדר",
+  removeSecret: "הסר",
+  howToGetGrow: "איך משיגים את המפתחות?",
+  growStep1: "היכנס/י לחשבון Grow שלך בכתובת grow.business ← הגדרות ← מפתחות / API.",
+  growStep2: "העתק/י את \"קוד העמוד\" (Page Code) ואת \"מזהה המשתמש\" (User ID).",
+  growStep3: "הדבק/י אותם כאן למטה ולחצ/י \"שמור מאובטח\". המפתחות מוצפנים ואינם נחשפים.",
+
+  // onboarding
+  onboarding: "אשף הקמה",
+  onboardingTitle: "בואו נחבר את מערכת קביעת הפגישות שלך",
+  onboardingIntro: "3 שלבים קצרים כדי שהבוט יתחיל לקבוע פגישות מכירה בוואטסאפ.",
+  stepDone: "בוצע",
+  stepTodo: "לביצוע",
+  ob1Title: "1. חיבור מספר וואטסאפ",
+  ob1Desc: "חבר/י את המספר שדרכו הלקוחות כותבים אליך.",
+  ob1Cta: "לחיבור וואטסאפ",
+  ob2Title: "2. הגדרת שעות פנויות",
+  ob2Desc: "המערכת מציעה ללקוח מועדים פנויים לפי הזמינות שלך (כרגע: א׳–ה׳ 09:00–17:00).",
+  ob3Title: "3. חיבור תשלום (Grow) — אופציונלי",
+  ob3Desc: "רק אם תרצה/י לגבות תשלום עבור המנוי. הדבק/י את מפתחות Grow באופן מאובטח.",
+  obFinish: "סיום — למרכז הבקרה",
+  obConnected: "מחובר ✅",
+
   // flows
   flowsTitle: "בוטים (תסריטים)",
   flowsSubtitle: "התסריטים שהבוט מריץ מול לידים",
@@ -102,6 +145,14 @@ export const he = {
   activate: "הפעל",
   deactivate: "כבה",
   backToFlows: "→ חזרה לתסריטים",
+
+  // flow builder — trigger
+  triggerTitle: "מתי הבוט מתחיל? (טריגר)",
+  triggerDesc: "כל שיחה מתחילה מהודעה של הלקוח. בחר/י מה מפעיל את התסריט הזה.",
+  triggerAny: "כל הודעה ראשונה",
+  triggerKeyword: "מילות מפתח",
+  triggerKeywordsLabel: "מילים שיפעילו (מופרדות בפסיק)",
+  triggerKeywordsHint: "לדוגמה: מעוניין, פגישה, מחיר",
 
   // flow builder
   saveFlow: "שמור תסריט",

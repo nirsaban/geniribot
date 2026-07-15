@@ -66,10 +66,13 @@ scale & polish.
 - **Verified live:** editor renders with graph data; save round-trip → validation (good passes, broken rejected) + version bump + layout persisted + engine still parses. 15/15 typecheck, 20/20 tests.
 - Still to do (later): drag-to-connect edges, rollback to a prior version, in-editor test-run.
 
-### Phase 7 — SaaS-ready
-- Billing (Stripe/Paddle): plans cap connections / contacts / monthly messages; usage metering.
-- Onboarding wizard, team invites + RBAC UI, per-org settings, audit log.
-- Hebrew/RTL polish + a `he.ts` copy dictionary; marketing/landing site.
+### Phase 7 — SaaS-ready ✅ CORE DONE (2026-07-15)
+- [x] Billing via **Grow** (Israeli payments, NOT Stripe): `@kesher/billing` plan catalog (FREE/STARTER/PRO + limits) + `GrowProvider` (Meshulam light API `createPaymentProcess`) behind a `PaymentProvider` interface; `/dashboard/billing` plans page + checkout; `/api/billing/grow/webhook` activates the plan. Plan connection-limit enforced.
+- [x] **Secure per-tenant secrets**: `Secret` model (AES-256-GCM encrypted, `@kesher/core` crypto); a "paste your Grow keys" UI that only ever shows a masked hint; save/remove server actions.
+- [x] **Onboarding wizard** (`/dashboard/onboarding`): 3 steps (connect WhatsApp → availability → paste Grow secret) with instructions on how to get the secret; `onboardedAt` on Organization.
+- [x] **Flow triggers** (user request): every flow starts from an inbound message; the builder's first section defines the trigger (any / keyword). Worker routes a new conversation to the flow whose trigger matches the message (keyword > catch-all). Shown in flows list + editor.
+- **Verified live:** trigger routing (keyword→support, else→catch-all), secret encrypt/decrypt round-trip, billing/onboarding/settings pages render. 17/17 typecheck, 23/23 tests.
+- Still to do: team invites + RBAC UI, usage metering/audit log, Grow webhook signature verify (needs a merchant account), marketing/landing.
 
 ### Phase 8 — Scale & hardening
 - **Official WhatsApp Cloud API provider** (the strategic upgrade off Baileys' ban risk).
