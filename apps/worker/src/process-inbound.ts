@@ -33,28 +33,37 @@ const log = childLogger("worker:inbound");
 export async function processInbound(job: InboundJob): Promise<void> {
   const { organizationId, connectionId, from, text } = job;
 
-  const contact = await prisma.contact.upsert({
-    where: { organizationId_phone: { organizationId, phone: from } },
-    update: {},
-    create: { organizationId, phone: from },
-  });
+  const contact = await resolveContact(organizationId, from);
 
-  // An existing active conversation continues its flow; a NEW one is matched to
-  // a flow by its trigger (what the lead sent). Every flow starts from inbound.
   let convo = await prisma.conversation.findFirst({
     where: { organizationId, contactId: contact.id, status: "ACTIVE" },
     orderBy: { lastMessageAt: "desc" },
   });
 
+  // A keyword trigger acts like a command: it (re)starts its flow even if
+  // another conversation is in progress. Otherwise an active conversation
+  // continues its flow, and a brand-new one is matched by trigger.
+  const keywordFlow = await selectKeywordFlow(organizationId, text);
   let flowRow: Flow | null = null;
-  if (convo?.flowId) {
+
+  if (keywordFlow && (!convo || convo.flowId !== keywordFlow.id)) {
+    if (convo) {
+      await prisma.conversation.update({ where: { id: convo.id }, data: { status: "ABANDONED" } });
+      convo = null;
+    }
+    flowRow = keywordFlow;
+  } else if (convo?.flowId) {
     flowRow = await prisma.flow.findUnique({ where: { id: convo.flowId } });
   }
   if (!flowRow) {
     flowRow = await selectFlowByTrigger(organizationId, connectionId, text);
   }
   if (!flowRow) {
-    log.warn({ organizationId, connectionId }, "no matching flow; ignoring message");
+    const activeCount = await prisma.flow.count({ where: { organizationId, isActive: true } });
+    log.warn(
+      { organizationId, connectionId, activeFlows: activeCount },
+      activeCount === 0 ? "no ACTIVE flow — activate a flow in the dashboard" : "no matching flow; ignoring message",
+    );
     return;
   }
   const flow = FlowDefinition.parse(flowRow.definition);
@@ -97,6 +106,38 @@ export async function processInbound(job: InboundJob): Promise<void> {
   const isFresh = !prevState || prevState.currentNodeId === undefined;
   const result = isFresh ? start(flow) : step(flow, normalizeState(prevState), { text });
   await applyAndPersist(flow, result, ctx);
+}
+
+/** Find-or-create a contact, tolerant of the concurrent-message create race. */
+async function resolveContact(organizationId: string, phone: string) {
+  const where = { organizationId_phone: { organizationId, phone } };
+  const existing = await prisma.contact.findUnique({ where });
+  if (existing) return existing;
+  try {
+    return await prisma.contact.create({ data: { organizationId, phone } });
+  } catch (err) {
+    // Another message for the same new contact won the create race.
+    if ((err as { code?: string }).code === "P2002") {
+      const c = await prisma.contact.findUnique({ where });
+      if (c) return c;
+    }
+    throw err;
+  }
+}
+
+/** An ACTIVE flow whose keyword trigger matches this message (most specific). */
+async function selectKeywordFlow(organizationId: string, text: string): Promise<Flow | null> {
+  const flows = await prisma.flow.findMany({
+    where: { organizationId, isActive: true },
+    orderBy: { createdAt: "asc" },
+  });
+  for (const f of flows) {
+    const parsed = FlowDefinition.safeParse(f.definition);
+    if (!parsed.success) continue;
+    const t = parsed.data.trigger;
+    if (triggerSpecificity(t) === 1 && matchesTrigger(t, text)) return f;
+  }
+  return null;
 }
 
 /**

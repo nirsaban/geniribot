@@ -256,8 +256,11 @@ export const he = {
   whenStarts: "מתי השיחה מתחילה?",
 
   // flow builder
-  saveFlow: "שמור תסריט",
+  saveFlow: "שמור והפעל",
   saved: "נשמר ✅",
+  savedLive: "נשמר — הבוט פעיל ועונה ללקוחות! ✅",
+  flowLive: "🟢 פעיל — הבוט עונה ללקוחות",
+  flowOff: "⚪ כבוי — שמור/י כדי להפעיל את הבוט",
   saveError: "שגיאה",
   selectNode: "בחר/י שלב לעריכה",
   startNode: "שלב התחלה",

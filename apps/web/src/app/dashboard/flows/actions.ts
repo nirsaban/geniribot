@@ -19,7 +19,10 @@ async function ownFlow(org: string, id: string) {
 }
 
 /** Persist an edited flow definition (validated) and bump its version. */
-export async function saveFlowAction(id: string, definitionJson: string): Promise<{ error?: string }> {
+export async function saveFlowAction(
+  id: string,
+  definitionJson: string,
+): Promise<{ error?: string; activated?: boolean }> {
   const org = await requireOrg();
   const flow = await ownFlow(org, id);
 
@@ -38,13 +41,22 @@ export async function saveFlowAction(id: string, definitionJson: string): Promis
     return { error: "start node missing" };
   }
 
+  // Auto-activate on save if the org has no active flow yet — so a freshly built
+  // bot actually goes live instead of silently sitting inactive.
+  const activeElsewhere = await prisma.flow.count({
+    where: { organizationId: org, isActive: true, id: { not: flow.id } },
+  });
   await prisma.flow.update({
     where: { id: flow.id },
-    data: { definition: raw as Prisma.InputJsonValue, version: { increment: 1 } },
+    data: {
+      definition: raw as Prisma.InputJsonValue,
+      version: { increment: 1 },
+      ...(activeElsewhere === 0 ? { isActive: true } : {}),
+    },
   });
   revalidatePath("/dashboard/flows");
   revalidatePath(`/dashboard/flows/${id}/edit`);
-  return {};
+  return { activated: activeElsewhere === 0 };
 }
 
 export async function toggleFlowActiveAction(formData: FormData): Promise<void> {

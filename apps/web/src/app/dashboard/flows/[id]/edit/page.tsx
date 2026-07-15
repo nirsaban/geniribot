@@ -28,7 +28,7 @@ export default async function EditFlowPage({ params }: { params: Promise<{ id: s
       <h1 className="mb-5 mt-2 text-2xl font-bold text-ink">
         {flow.name} <span className="text-sm font-normal text-slate-400">v{flow.version}</span>
       </h1>
-      <SequenceEditor flowId={flow.id} initial={def} />
+      <SequenceEditor flowId={flow.id} initial={def} isActive={flow.isActive} />
     </>
   );
 }

@@ -80,12 +80,21 @@ function stepsToDef(steps: Step[], trigger: Trigger): Def {
   return { start: steps[0]?.id ?? "n1", nodes, trigger };
 }
 
-export function SequenceEditor({ flowId, initial }: { flowId: string; initial: Def }) {
+export function SequenceEditor({
+  flowId,
+  initial,
+  isActive: initialActive,
+}: {
+  flowId: string;
+  initial: Def;
+  isActive: boolean;
+}) {
   const router = useRouter();
   const [steps, setSteps] = useState<Step[]>(() => defToSteps(initial));
   const [trigger, setTrigger] = useState<Trigger>(initial.trigger ?? { type: "any" });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [live, setLive] = useState(initialActive);
 
   const patch = (id: string, p: Partial<Step>) => setSteps((s) => s.map((x) => (x.id === id ? { ...x, ...p } : x)));
   const remove = (id: string) => setSteps((s) => s.filter((x) => x.id !== id));
@@ -118,14 +127,24 @@ export function SequenceEditor({ flowId, initial }: { flowId: string; initial: D
     const def = stepsToDef(steps, trigger);
     const res = await saveFlowAction(flowId, JSON.stringify(def));
     setSaving(false);
-    setMsg(res.error ? `${he.saveError}: ${res.error}` : he.saved);
-    if (!res.error) router.refresh();
+    if (res.error) {
+      setMsg(`${he.saveError}: ${res.error}`);
+      return;
+    }
+    if (res.activated) setLive(true);
+    setMsg(res.activated || live ? he.savedLive : he.saved);
+    router.refresh();
   };
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
       {/* Editor column */}
       <div className="space-y-4">
+        {/* Live status */}
+        <div className={`rounded-xl px-4 py-2 text-sm font-semibold ${live ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+          {live ? he.flowLive : he.flowOff}
+        </div>
+
         {/* Trigger */}
         <div className="card-p !bg-emerald-50">
           <div className="text-sm font-bold text-emerald-800">▶ {he.whenStarts}</div>
