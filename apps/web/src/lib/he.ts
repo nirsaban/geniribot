@@ -68,7 +68,10 @@ export const he = {
   transcript: "שיחה",
   noMessages: "אין הודעות עדיין",
   appointmentsTitle: "פגישות",
+  appointmentsSubtitle: "פגישות מכירה שנקבעו דרך הבוט",
   noAppointments: "אין פגישות",
+  upcoming: "הקרובות",
+  past: "עברו",
   msgIn: "ליד",
   msgOut: "בוט",
 

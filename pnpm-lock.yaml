@@ -106,6 +106,9 @@ importers:
       '@kesher/flow-engine':
         specifier: workspace:*
         version: link:../../packages/flow-engine
+      '@kesher/scheduling':
+        specifier: workspace:*
+        version: link:../../packages/scheduling
       bullmq:
         specifier: ^5.34.6
         version: 5.80.3

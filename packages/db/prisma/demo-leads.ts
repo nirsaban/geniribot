@@ -13,6 +13,23 @@ async function main() {
   const conn = await prisma.whatsAppConnection.findFirst({ where: { organizationId: org.id } });
   const connectionId = conn?.id ?? "demo-connection";
 
+  // Availability: Sun–Thu, 09:00–17:00 Israel time, 30-min slots.
+  // (Phase-0 scheduling is UTC-only; 06:00–14:00 UTC ≈ 09:00–17:00 in summer IL.
+  //  Proper per-tenant timezone handling lands in Phase 5.)
+  await prisma.availabilityRule.deleteMany({ where: { organizationId: org.id } });
+  for (const weekday of [0, 1, 2, 3, 4]) {
+    await prisma.availabilityRule.create({
+      data: {
+        organizationId: org.id,
+        weekday,
+        startMinute: 6 * 60,
+        endMinute: 14 * 60,
+        slotMinutes: 30,
+        timezone: "Asia/Jerusalem",
+      },
+    });
+  }
+
   const samples = [
     {
       phone: "972501112233",

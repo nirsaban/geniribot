@@ -73,6 +73,12 @@ export interface FlowState {
   /** retries for the current waiting question */
   retries: number;
   status: "active" | "completed" | "handoff";
+  /** set when the conversation is paused waiting for a booking slot choice */
+  awaiting?: "booking";
+  /** node to resume at once the pause (e.g. booking) resolves */
+  resumeNodeId?: string | null;
+  /** worker-populated: slots offered to the lead while awaiting a booking */
+  booking?: { offered: Array<{ start: string; end: string }> };
 }
 
 export function initialState(flow: FlowDefinition): FlowState {

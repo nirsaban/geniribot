@@ -26,12 +26,33 @@ export function start(flow: FlowDefinition): StepResult {
   return walk(flow, state, []);
 }
 
+/**
+ * Resume a flow after an interactive pause (booking) has been handled by the
+ * worker. Continues from the paused node's `next`.
+ */
+export function resumeBooking(flow: FlowDefinition, state: FlowState): StepResult {
+  const cleared: FlowState = {
+    ...state,
+    awaiting: undefined,
+    resumeNodeId: undefined,
+    booking: undefined,
+    currentNodeId: state.resumeNodeId ?? null,
+    retries: 0,
+  };
+  return walk(flow, cleared, []);
+}
+
 /** Advance the flow with the user's reply to the current question. */
 export function step(
   flow: FlowDefinition,
   state: FlowState,
   event: InboundEvent,
 ): StepResult {
+  // While paused for booking, the worker handles the reply (needs slot I/O),
+  // not the pure engine.
+  if (state.awaiting === "booking") {
+    return { state, actions: [], awaitingInput: true };
+  }
   if (state.status !== "active" || !state.currentNodeId) {
     return { state, actions: [], awaitingInput: false };
   }
@@ -112,6 +133,26 @@ function walk(
     if (node.type === "condition") {
       current = evalCondition(node.when, answers) ? node.then : node.else;
       continue;
+    }
+
+    // book_appointment is an interactive pause: emit the action and wait for
+    // the worker to offer slots and capture the lead's choice. The engine stays
+    // pure (no slot I/O) — resume with resumeBooking() once it's handled.
+    if (node.type === "action" && node.action === "book_appointment") {
+      acc.push({ kind: "book_appointment", params: { ...node.params, resumeNodeId: node.next } });
+      return {
+        state: {
+          ...state,
+          answers,
+          currentNodeId: current,
+          awaiting: "booking",
+          resumeNodeId: node.next,
+          retries: 0,
+          status: "active",
+        },
+        actions: acc,
+        awaitingInput: true,
+      };
     }
 
     // action node

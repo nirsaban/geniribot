@@ -13,6 +13,7 @@
     "@kesher/core": "workspace:*",
     "@kesher/db": "workspace:*",
     "@kesher/flow-engine": "workspace:*",
+    "@kesher/scheduling": "workspace:*",
     "bullmq": "^5.34.6",
     "ioredis": "^5.4.2"
   },

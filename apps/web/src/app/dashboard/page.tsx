@@ -70,6 +70,12 @@ export default async function DashboardPage() {
           {he.leads} →
         </Link>
         <Link
+          href="/dashboard/appointments"
+          className="inline-block rounded-lg border border-gray-300 px-5 py-2 font-semibold text-gray-700 hover:bg-gray-100"
+        >
+          {he.appointments} →
+        </Link>
+        <Link
           href="/dashboard/flows"
           className="inline-block rounded-lg border border-gray-300 px-5 py-2 font-semibold text-gray-700 hover:bg-gray-100"
         >

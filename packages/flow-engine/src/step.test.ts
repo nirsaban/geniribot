@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evalCondition, start, step } from "./step.js";
+import { evalCondition, resumeBooking, start, step } from "./step.js";
 import { FlowDefinition } from "./types.js";
 
 const flow = FlowDefinition.parse({
@@ -42,15 +42,28 @@ describe("flow-engine happy path", () => {
     expect(r2.actions).toContainEqual({ kind: "save_field", field: "name", value: "דנה" });
   });
 
-  it("routes 'מכירה' to book_appointment and completes", () => {
+  it("routes 'מכירה' to book_appointment and pauses for a slot choice", () => {
     let s = start(flow).state;
     s = step(flow, s, { text: "דנה" }).state;
     const r = step(flow, s, { text: "1" }); // choice index 1 => מכירה
     expect(r.state.answers.service).toBe("מכירה");
-    expect(r.actions).toContainEqual({ kind: "book_appointment", params: undefined });
+    expect(r.actions).toContainEqual({ kind: "book_appointment", params: { resumeNodeId: "n7" } });
+    // pauses waiting for the lead to pick a slot; does NOT reach "תודה!" yet
+    expect(r.awaitingInput).toBe(true);
+    expect(r.state.awaiting).toBe("booking");
+    expect(r.state.resumeNodeId).toBe("n7");
+    expect(r.actions).not.toContainEqual({ kind: "send_message", text: "תודה!" });
+  });
+
+  it("resumeBooking continues the flow to completion after booking", () => {
+    let s = start(flow).state;
+    s = step(flow, s, { text: "דנה" }).state;
+    s = step(flow, s, { text: "1" }).state; // now awaiting booking
+    const r = resumeBooking(flow, s);
     expect(r.actions).toContainEqual({ kind: "send_message", text: "תודה!" });
     expect(r.awaitingInput).toBe(false);
     expect(r.state.status).toBe("completed");
+    expect(r.state.awaiting).toBeUndefined();
   });
 
   it("routes 'תמיכה' to notify_agent", () => {

@@ -2,11 +2,13 @@ import { childLogger } from "@kesher/core";
 import { prisma, type Prisma } from "@kesher/db";
 import {
   FlowDefinition,
+  resumeBooking,
   start,
   step,
-  type EngineAction,
   type FlowState,
+  type StepResult,
 } from "@kesher/flow-engine";
+import { formatSlot, offerSlots, slotMenu } from "./booking.js";
 import { OUTBOUND_JOB, outboundQueue, type InboundJob } from "./queues.js";
 
 const log = childLogger("worker:inbound");
@@ -14,36 +16,31 @@ const log = childLogger("worker:inbound");
 /**
  * The runtime brain: take one inbound WhatsApp message, run it through the flow
  * engine, persist everything, and enqueue outbound replies. Pure logic lives in
- * @kesher/flow-engine; this function does only the I/O around it.
+ * @kesher/flow-engine; the booking pause (offer slots → capture choice → create
+ * appointment → resume) is handled here because it needs DB I/O.
  */
 export async function processInbound(job: InboundJob): Promise<void> {
   const { organizationId, connectionId, from, text } = job;
 
-  // 1. Resolve or create the contact (tenant-scoped by org + phone).
   const contact = await prisma.contact.upsert({
     where: { organizationId_phone: { organizationId, phone: from } },
     update: {},
     create: { organizationId, phone: from },
   });
 
-  // 2. Pick the flow: connection default, else the org's active flow.
-  const connection = await prisma.whatsAppConnection.findUnique({
-    where: { id: connectionId },
-  });
+  const connection = await prisma.whatsAppConnection.findUnique({ where: { id: connectionId } });
   const flowRow = connection?.defaultFlowId
     ? await prisma.flow.findUnique({ where: { id: connection.defaultFlowId } })
     : await prisma.flow.findFirst({
         where: { organizationId, isActive: true },
         orderBy: { createdAt: "asc" },
       });
-
   if (!flowRow) {
     log.warn({ organizationId, connectionId }, "no active flow; ignoring message");
     return;
   }
   const flow = FlowDefinition.parse(flowRow.definition);
 
-  // 3. Load or open the conversation.
   let convo = await prisma.conversation.findFirst({
     where: { organizationId, contactId: contact.id, status: "ACTIVE" },
     orderBy: { lastMessageAt: "desc" },
@@ -61,56 +58,152 @@ export async function processInbound(job: InboundJob): Promise<void> {
     });
   }
 
-  // Record the inbound message.
   await prisma.message.create({
     data: { conversationId: convo.id, direction: "IN", body: text },
   });
 
-  // 4. Run the engine. Fresh conversation → start() (greet + first question);
-  //    otherwise → step() with the user's reply.
+  const ctx: Ctx = {
+    organizationId,
+    connectionId,
+    to: from,
+    contactId: contact.id,
+    conversationId: convo.id,
+    contactFields: (contact.fields as Record<string, unknown>) ?? {},
+    contactName: contact.name,
+  };
   const prevState = convo.state as unknown as Partial<FlowState>;
-  const isFresh = !prevState || prevState.currentNodeId === undefined;
-  const result = isFresh
-    ? start(flow)
-    : step(flow, normalizeState(prevState), { text });
 
-  // 5. Apply side effects.
-  const savedFields: Record<string, unknown> = {};
-  for (const action of result.actions) {
-    await applyAction(action, {
-      organizationId,
-      connectionId,
-      to: from,
-      conversationId: convo.id,
-      savedFields,
-    });
+  // Branch 1: paused for a booking slot choice.
+  if (prevState.awaiting === "booking") {
+    await handleBookingReply(flow, normalizeState(prevState), text, ctx);
+    return;
   }
 
-  // 6. Persist contact fields + conversation state.
+  // Branch 2: normal engine run.
+  const isFresh = !prevState || prevState.currentNodeId === undefined;
+  const result = isFresh ? start(flow) : step(flow, normalizeState(prevState), { text });
+  await applyAndPersist(flow, result, ctx);
+}
+
+interface Ctx {
+  organizationId: string;
+  connectionId: string;
+  to: string;
+  contactId: string;
+  conversationId: string;
+  contactFields: Record<string, unknown>;
+  contactName: string | null;
+}
+
+/** Apply engine actions (incl. the booking offer) and persist final state. */
+async function applyAndPersist(flow: FlowDefinition, result: StepResult, ctx: Ctx): Promise<void> {
+  const savedFields: Record<string, unknown> = {};
+  let finalState: FlowState = result.state;
+
+  for (const action of result.actions) {
+    if (action.kind === "send_message") {
+      await sendOut(action.text, ctx);
+    } else if (action.kind === "save_field") {
+      savedFields[action.field] = action.value;
+    } else if (action.kind === "book_appointment") {
+      const slots = await offerSlots(ctx.organizationId);
+      if (slots.length > 0) {
+        await sendOut(slotMenu(slots), ctx);
+        finalState = {
+          ...finalState,
+          booking: {
+            offered: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString() })),
+          },
+        };
+      } else {
+        // No availability configured → skip booking, continue the flow.
+        await sendOut("ניצור איתך קשר בהקדם לתיאום מועד 🙏", ctx);
+        const resumed = resumeBooking(flow, finalState);
+        for (const a of resumed.actions) if (a.kind === "send_message") await sendOut(a.text, ctx);
+        finalState = resumed.state;
+      }
+    } else {
+      log.info({ kind: action.kind, conversationId: ctx.conversationId }, "action (later phase)");
+    }
+  }
+
+  await persist(ctx, savedFields, finalState, result.awaitingInput);
+}
+
+/** Handle the lead's reply while paused on the slot menu. */
+async function handleBookingReply(
+  flow: FlowDefinition,
+  state: FlowState,
+  text: string,
+  ctx: Ctx,
+): Promise<void> {
+  const offered = state.booking?.offered ?? [];
+  const pick = Number(text.trim());
+
+  if (!Number.isInteger(pick) || pick < 1 || pick > offered.length) {
+    // Re-prompt with the same menu.
+    const slots = offered.map((o) => ({ start: new Date(o.start), end: new Date(o.end) }));
+    await sendOut("בחר/י מספר מהרשימה 🙏\n" + slotMenu(slots), ctx);
+    return; // stay paused; state unchanged
+  }
+
+  const slot = offered[pick - 1]!;
+  await prisma.appointment.create({
+    data: {
+      organizationId: ctx.organizationId,
+      contactId: ctx.contactId,
+      startsAt: new Date(slot.start),
+      endsAt: new Date(slot.end),
+      status: "BOOKED",
+    },
+  });
+  await sendOut(`מצוין! נקבעה שיחה ל־${formatSlot(new Date(slot.start))} ✅`, ctx);
+
+  // Resume the flow after the booking (e.g. the closing message).
+  const resumed = resumeBooking(flow, state);
+  const savedFields: Record<string, unknown> = {};
+  for (const a of resumed.actions) {
+    if (a.kind === "send_message") await sendOut(a.text, ctx);
+    else if (a.kind === "save_field") savedFields[a.field] = a.value;
+  }
+  await persist(ctx, savedFields, resumed.state, resumed.awaitingInput);
+}
+
+async function sendOut(text: string, ctx: Ctx): Promise<void> {
+  await prisma.message.create({
+    data: { conversationId: ctx.conversationId, direction: "OUT", body: text },
+  });
+  await outboundQueue.add(OUTBOUND_JOB, {
+    organizationId: ctx.organizationId,
+    connectionId: ctx.connectionId,
+    to: ctx.to,
+    text,
+  });
+}
+
+async function persist(
+  ctx: Ctx,
+  savedFields: Record<string, unknown>,
+  state: FlowState,
+  awaitingInput: boolean,
+): Promise<void> {
   if (Object.keys(savedFields).length > 0) {
-    const merged = {
-      ...(contact.fields as Record<string, unknown>),
-      ...savedFields,
-    };
+    const merged = { ...ctx.contactFields, ...savedFields };
     await prisma.contact.update({
-      where: { id: contact.id },
+      where: { id: ctx.contactId },
       data: {
         fields: merged as Prisma.InputJsonValue,
-        name: (merged.name as string | undefined) ?? contact.name,
+        name: (merged.name as string | undefined) ?? ctx.contactName,
       },
     });
   }
 
   await prisma.conversation.update({
-    where: { id: convo.id },
+    where: { id: ctx.conversationId },
     data: {
-      state: result.state as unknown as Prisma.InputJsonValue,
-      currentNodeId: result.state.currentNodeId,
-      status: result.awaitingInput
-        ? "ACTIVE"
-        : result.state.status === "handoff"
-          ? "HANDOFF"
-          : "COMPLETED",
+      state: state as unknown as Prisma.InputJsonValue,
+      currentNodeId: state.currentNodeId,
+      status: awaitingInput ? "ACTIVE" : state.status === "handoff" ? "HANDOFF" : "COMPLETED",
       lastMessageAt: new Date(),
     },
   });
@@ -122,44 +215,8 @@ function normalizeState(s: Partial<FlowState>): FlowState {
     answers: s.answers ?? {},
     retries: s.retries ?? 0,
     status: s.status ?? "active",
+    awaiting: s.awaiting,
+    resumeNodeId: s.resumeNodeId,
+    booking: s.booking,
   };
-}
-
-interface ActionCtx {
-  organizationId: string;
-  connectionId: string;
-  to: string;
-  conversationId: string;
-  savedFields: Record<string, unknown>;
-}
-
-async function applyAction(action: EngineAction, ctx: ActionCtx): Promise<void> {
-  switch (action.kind) {
-    case "send_message":
-      await prisma.message.create({
-        data: { conversationId: ctx.conversationId, direction: "OUT", body: action.text },
-      });
-      await outboundQueue.add(OUTBOUND_JOB, {
-        organizationId: ctx.organizationId,
-        connectionId: ctx.connectionId,
-        to: ctx.to,
-        text: action.text,
-      });
-      break;
-    case "save_field":
-      ctx.savedFields[action.field] = action.value;
-      break;
-    case "book_appointment":
-      // Phase 4: offer slots + create Appointment. For now, log intent.
-      log.info({ conversationId: ctx.conversationId }, "book_appointment (Phase 4)");
-      break;
-    case "notify_agent":
-    case "assign_owner":
-    case "add_tag":
-    case "webhook":
-    case "handoff_to_human":
-    case "end":
-      log.info({ kind: action.kind, conversationId: ctx.conversationId }, "action (later phase)");
-      break;
-  }
 }

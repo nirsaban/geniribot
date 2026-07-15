@@ -41,12 +41,14 @@ scale & polish.
 - Still to do (Phase 3.1, later): assign-owner/add-tag/notes UI, conversations list view, completion-rate KPIs.
 - **Exit:** ✅ the business can browse leads, read transcripts, and see flows from the dashboard.
 
-### Phase 4 — Scheduling (book the call) → **MVP complete**
-- `packages/scheduling`: availability rules → open slots (minus existing appointments).
-- `book_appointment` flow action offers slots in-chat; booking creates an Appointment + WhatsApp confirmation.
-- Hosted booking page (same engine) as an alternative link.
-- Appointments view in the dashboard.
-- **Exit:** a lead books a sales call end-to-end from a WhatsApp conversation.
+### Phase 4 — Scheduling (book the call) → **MVP COMPLETE** ✅ DONE (2026-07-15)
+- [x] `packages/scheduling`: availability rules → open slots (minus booked), min-notice, buffers (built+tested P0).
+- [x] Interactive booking pause in the flow-engine (`book_appointment` pauses → `resumeBooking()` continues); pure engine, no slot I/O.
+- [x] Worker booking loop: offers a numbered slot menu in-chat, captures the pick, creates the Appointment, sends a WhatsApp confirmation, resumes the flow (closing message). No-availability fallback message.
+- [x] AvailabilityRule seed (Sun–Thu 09:00–17:00 IL, 30-min); Appointments dashboard (`/dashboard/appointments`, upcoming/past).
+- **Verified end-to-end:** simulated lead conversation → bot offered 5 real slots → lead picked → Appointment created (BOOKED) + confirmation + closing message + conversation COMPLETED; appointment shows live in the dashboard. 13/13 typecheck, 16/16 tests.
+- Still to do (later): hosted booking page (public link, same engine), reschedule/cancel.
+- **Exit:** ✅ a lead books a sales call end-to-end from a WhatsApp conversation. **MVP (Phases 0–4) complete.**
 
 ### Phase 5 — Google Calendar sync + reminders
 - Google OAuth per user; two-way sync (write events, read freebusy to block slots).
