@@ -1,0 +1,104 @@
+import { z } from "zod";
+
+/**
+ * A flow is a directed graph of nodes stored as JSON per organization.
+ * The engine is a pure reducer over this definition — see step.ts.
+ */
+
+export const ExpectType = z.enum(["text", "number", "email", "phone", "choice", "date"]);
+export type ExpectType = z.infer<typeof ExpectType>;
+
+export const ActionKind = z.enum([
+  "save_field",
+  "add_tag",
+  "notify_agent",
+  "assign_owner",
+  "book_appointment",
+  "webhook",
+  "handoff_to_human",
+  "end",
+]);
+export type ActionKind = z.infer<typeof ActionKind>;
+
+const baseNext = z.string().nullable();
+
+export const MessageNode = z.object({
+  type: z.literal("message"),
+  text: z.string(),
+  next: baseNext,
+});
+
+export const QuestionNode = z.object({
+  type: z.literal("question"),
+  field: z.string(),
+  prompt: z.string(),
+  expect: ExpectType.default("text"),
+  choices: z.array(z.string()).optional(),
+  next: baseNext,
+});
+
+export const ConditionNode = z.object({
+  type: z.literal("condition"),
+  // MVP: simple "answers.field == value" / "answers.field > n". Full expr lang later.
+  when: z.string(),
+  then: z.string().nullable(),
+  else: z.string().nullable(),
+});
+
+export const ActionNode = z.object({
+  type: z.literal("action"),
+  action: ActionKind,
+  params: z.record(z.unknown()).optional(),
+  next: baseNext,
+});
+
+export const FlowNode = z.discriminatedUnion("type", [
+  MessageNode,
+  QuestionNode,
+  ConditionNode,
+  ActionNode,
+]);
+export type FlowNode = z.infer<typeof FlowNode>;
+
+export const FlowDefinition = z.object({
+  start: z.string(),
+  nodes: z.record(FlowNode),
+});
+export type FlowDefinition = z.infer<typeof FlowDefinition>;
+
+/** Per-conversation persisted state (stored in Conversation.state). */
+export interface FlowState {
+  currentNodeId: string | null;
+  answers: Record<string, unknown>;
+  /** retries for the current waiting question */
+  retries: number;
+  status: "active" | "completed" | "handoff";
+}
+
+export function initialState(flow: FlowDefinition): FlowState {
+  return { currentNodeId: flow.start, answers: {}, retries: 0, status: "active" };
+}
+
+/** An incoming user event to feed the engine. */
+export interface InboundEvent {
+  text: string;
+}
+
+/** Side effects the runtime (worker) must carry out after a step. */
+export type EngineAction =
+  | { kind: "send_message"; text: string }
+  | { kind: "save_field"; field: string; value: unknown }
+  | { kind: "add_tag"; tag: string }
+  | { kind: "notify_agent"; params?: Record<string, unknown> }
+  | { kind: "assign_owner"; params?: Record<string, unknown> }
+  | { kind: "book_appointment"; params?: Record<string, unknown> }
+  | { kind: "webhook"; params?: Record<string, unknown> }
+  | { kind: "handoff_to_human" }
+  | { kind: "end" };
+
+export interface StepResult {
+  state: FlowState;
+  actions: EngineAction[];
+  /** true when the engine is now waiting for the user's next message. */
+  awaitingInput: boolean;
+}

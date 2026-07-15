@@ -1,0 +1,285 @@
+import { createRequire } from "node:module";
+import {
+  BufferJSON,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  initAuthCreds,
+  makeCacheableSignalKeyStore,
+  makeWASocket,
+} from "baileys";
+import type {
+  AuthenticationCreds,
+  SignalDataTypeMap,
+  SignalKeyStore,
+  WASocket,
+} from "baileys";
+import pino from "pino";
+
+// `proto` is re-exported by baileys via `export *`, which Node's CJS→ESM named
+// export detection misses at runtime. Pull it from the CJS module directly.
+const requireCjs = createRequire(import.meta.url);
+const { proto } = requireCjs("baileys") as {
+  proto: { Message: { AppStateSyncKeyData: { fromObject(o: unknown): unknown } } };
+};
+import type {
+  AuthStore,
+  ConnectionStatus,
+  OutboundMessage,
+  ProviderHandlers,
+  WhatsAppProvider,
+} from "./index.js";
+
+/**
+ * Baileys implementation of WhatsAppProvider (unofficial WhatsApp Web).
+ *
+ * One provider instance manages many connections (one per tenant number).
+ * Auth/session state is persisted through the injected AuthStore (Postgres in
+ * the gateway) as a single JSON blob per connection, so a restart re-hydrates
+ * sessions without re-scanning the QR. See docs/ARCHITECTURE.md §6, ADR-001.
+ */
+
+interface Session {
+  sock: WASocket;
+  status: ConnectionStatus;
+  /** guards against overlapping reconnect attempts */
+  reconnecting: boolean;
+}
+
+/** Shape we persist: creds + a flat keys map (`${type}-${id}` → value). */
+interface AuthBlob {
+  creds: AuthenticationCreds;
+  keys: Record<string, unknown>;
+}
+
+const RECONNECT_DELAY_MS = 3000;
+const logger = pino({ level: process.env.BAILEYS_LOG_LEVEL ?? "silent" });
+
+export class BaileysProvider implements WhatsAppProvider {
+  readonly name = "baileys";
+  private sessions = new Map<string, Session>();
+
+  constructor(
+    private readonly authStore: AuthStore,
+    private readonly handlers: ProviderHandlers,
+  ) {}
+
+  status(connectionId: string): ConnectionStatus {
+    return this.sessions.get(connectionId)?.status ?? "pending";
+  }
+
+  async connect(connectionId: string): Promise<void> {
+    const existing = this.sessions.get(connectionId);
+    if (existing && (existing.status === "connected" || existing.status === "qr")) {
+      return; // already live / pairing
+    }
+    await this.startSocket(connectionId);
+  }
+
+  async disconnect(connectionId: string): Promise<void> {
+    const session = this.sessions.get(connectionId);
+    if (session) {
+      try {
+        session.sock.end(undefined);
+      } catch {
+        /* ignore */
+      }
+      this.sessions.delete(connectionId);
+    }
+    await this.setStatus(connectionId, "disconnected");
+  }
+
+  async logout(connectionId: string): Promise<void> {
+    const session = this.sessions.get(connectionId);
+    if (session) {
+      try {
+        await session.sock.logout();
+      } catch {
+        /* ignore */
+      }
+      this.sessions.delete(connectionId);
+    }
+    await this.authStore.clear(connectionId);
+    await this.setStatus(connectionId, "logged_out");
+  }
+
+  async send(msg: OutboundMessage): Promise<void> {
+    const session = this.sessions.get(msg.connectionId);
+    if (!session || session.status !== "connected") {
+      throw new Error(`connection ${msg.connectionId} is not connected`);
+    }
+    await session.sock.sendMessage(toJid(msg.to), { text: msg.text });
+  }
+
+  // ---------- internals ----------
+  private async startSocket(connectionId: string): Promise<void> {
+    const { creds, keys, persist } = await this.loadAuth(connectionId);
+    const { version } = await fetchLatestBaileysVersion().catch(() => ({
+      version: undefined as [number, number, number] | undefined,
+    }));
+
+    const sock = makeWASocket({
+      auth: { creds, keys: makeCacheableSignalKeyStore(keys, logger) },
+      logger,
+      ...(version ? { version } : {}),
+      browser: ["Kesher", "Chrome", "1.0.0"],
+      markOnlineOnConnect: false,
+    });
+
+    const session: Session = { sock, status: "pending", reconnecting: false };
+    this.sessions.set(connectionId, session);
+
+    // Persist the initial creds immediately so the device identity is stable
+    // across restarts even before pairing completes.
+    void persist();
+
+    sock.ev.on("creds.update", () => {
+      void persist();
+    });
+
+    sock.ev.on("connection.update", (update) => {
+      const { connection, lastDisconnect, qr } = update;
+      if (qr) {
+        session.status = "qr";
+        void this.handlers.onQr({ connectionId, qr });
+        void this.setStatus(connectionId, "qr");
+      }
+      if (connection === "open") {
+        session.status = "connected";
+        const phone = sock.user?.id?.split(":")[0];
+        void this.setStatus(connectionId, "connected", phone);
+      }
+      if (connection === "close") {
+        const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })
+          ?.output?.statusCode;
+        const loggedOut = statusCode === DisconnectReason.loggedOut;
+        if (loggedOut) {
+          this.sessions.delete(connectionId);
+          void this.authStore.clear(connectionId);
+          void this.setStatus(connectionId, "logged_out");
+        } else {
+          void this.scheduleReconnect(connectionId, session);
+        }
+      }
+    });
+
+    sock.ev.on("messages.upsert", ({ messages, type }) => {
+      if (type !== "notify") return;
+      for (const m of messages) {
+        const inbound = normalizeInbound(connectionId, m);
+        if (inbound) void this.handlers.onInbound(inbound);
+      }
+    });
+  }
+
+  private async scheduleReconnect(connectionId: string, session: Session): Promise<void> {
+    if (session.reconnecting) return;
+    session.reconnecting = true;
+    session.status = "disconnected";
+    await this.setStatus(connectionId, "disconnected");
+    setTimeout(() => {
+      this.sessions.delete(connectionId);
+      void this.startSocket(connectionId).catch(() => {
+        /* next inbound / manual retry will try again */
+      });
+    }, RECONNECT_DELAY_MS);
+  }
+
+  private async setStatus(
+    connectionId: string,
+    status: ConnectionStatus,
+    phoneNumber?: string,
+  ): Promise<void> {
+    const session = this.sessions.get(connectionId);
+    if (session) session.status = status;
+    await this.handlers.onStatus({ connectionId, status, phoneNumber });
+  }
+
+  /** Build Baileys creds + a keystore backed by the AuthStore blob. */
+  private async loadAuth(connectionId: string): Promise<{
+    creds: AuthenticationCreds;
+    keys: SignalKeyStore;
+    persist: () => Promise<void>;
+  }> {
+    const raw = await this.authStore.load(connectionId);
+    const blob: AuthBlob = raw
+      ? (JSON.parse(JSON.stringify(raw), BufferJSON.reviver) as AuthBlob)
+      : { creds: initAuthCreds(), keys: {} };
+
+    const creds = blob.creds;
+    const keyMap = blob.keys;
+
+    const persist = async () => {
+      const serializable = JSON.parse(
+        JSON.stringify({ creds, keys: keyMap }, BufferJSON.replacer),
+      );
+      await this.authStore.save(connectionId, serializable);
+    };
+
+    const keys: SignalKeyStore = {
+      get: async (type, ids) => {
+        const out: Record<string, unknown> = {};
+        for (const id of ids) {
+          let value = keyMap[`${type}-${id}`];
+          if (type === "app-state-sync-key" && value) {
+            value = proto.Message.AppStateSyncKeyData.fromObject(value);
+          }
+          out[id] = value;
+        }
+        return out as { [id: string]: SignalDataTypeMap[typeof type] };
+      },
+      set: async (data) => {
+        for (const category in data) {
+          const cat = data[category as keyof typeof data];
+          for (const id in cat) {
+            const value = cat[id];
+            const key = `${category}-${id}`;
+            if (value) keyMap[key] = value;
+            else delete keyMap[key];
+          }
+        }
+        await persist();
+      },
+    };
+
+    return { creds, keys, persist };
+  }
+}
+
+function toJid(to: string): string {
+  return to.includes("@") ? to : `${to.replace(/[^\d]/g, "")}@s.whatsapp.net`;
+}
+
+interface WAMessageLike {
+  key: { remoteJid?: string | null; fromMe?: boolean | null; id?: string | null };
+  message?: {
+    conversation?: string | null;
+    extendedTextMessage?: { text?: string | null } | null;
+  } | null;
+  messageTimestamp?: number | Long | null;
+}
+type Long = { toNumber(): number };
+
+function normalizeInbound(
+  connectionId: string,
+  m: WAMessageLike,
+): import("./index.js").InboundMessage | null {
+  const jid = m.key.remoteJid;
+  if (!jid || m.key.fromMe) return null;
+  // Skip groups, status broadcasts, newsletters — 1:1 lead chats only for MVP.
+  if (jid.endsWith("@g.us") || jid === "status@broadcast" || jid.endsWith("@newsletter")) {
+    return null;
+  }
+  const text = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? null;
+  if (!text) return null;
+
+  const ts = m.messageTimestamp;
+  const timestamp = typeof ts === "number" ? ts : (ts?.toNumber?.() ?? 0);
+
+  return {
+    connectionId,
+    from: jid.split("@")[0] ?? jid,
+    text,
+    externalId: m.key.id ?? `${jid}-${timestamp}`,
+    timestamp,
+  };
+}

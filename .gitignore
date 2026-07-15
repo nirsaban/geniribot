@@ -1,0 +1,31 @@
+node_modules/
+dist/
+.next/
+.turbo/
+out/
+coverage/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# prisma
+packages/db/prisma/migrations/dev.db*
+
+# whatsapp/baileys session state (filesystem fallback)
+apps/gateway/.sessions/
+
+# logs
+*.log
+npm-debug.log*
+
+# runtime (pidfiles, logs, boot log)
+data/
+*.pid
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+*.pem

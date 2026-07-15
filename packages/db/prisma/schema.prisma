@@ -1,0 +1,224 @@
+// Kesher — data model. See docs/DATA-MODEL.md for rationale.
+// Every domain table carries organizationId for tenant isolation.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Tenancy & auth ----------
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  connections   WhatsAppConnection[]
+  flows         Flow[]
+  contacts      Contact[]
+  conversations Conversation[]
+  appointments  Appointment[]
+  availability  AvailabilityRule[]
+  calendarLinks CalendarIntegration[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  email          String   @unique
+  passwordHash   String
+  name           String?
+  role           Role     @default(AGENT)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+}
+
+// ---------- WhatsApp ----------
+model WhatsAppConnection {
+  id             String   @id @default(cuid())
+  organizationId String
+  label          String
+  phoneNumber    String?
+  provider       String   @default("baileys")
+  status         WaStatus @default(PENDING)
+  authState      Json?
+  defaultFlowId  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+enum WaStatus {
+  PENDING
+  QR
+  CONNECTED
+  DISCONNECTED
+  LOGGED_OUT
+}
+
+// ---------- Flows ----------
+model Flow {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  version        Int      @default(1)
+  isActive       Boolean  @default(false)
+  definition     Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// ---------- Contacts / leads ----------
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  phone          String
+  name           String?
+  fields         Json     @default("{}")
+  tags           String[] @default([])
+  ownerUserId    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  appointments  Appointment[]
+
+  @@unique([organizationId, phone])
+  @@index([organizationId])
+}
+
+// ---------- Conversations (flow-run state) ----------
+model Conversation {
+  id             String      @id @default(cuid())
+  organizationId String
+  contactId      String
+  connectionId   String
+  flowId         String?
+  currentNodeId  String?
+  state          Json        @default("{}")
+  status         ConvoStatus @default(ACTIVE)
+  lastMessageAt  DateTime    @default(now())
+  createdAt      DateTime    @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@index([organizationId])
+  @@index([contactId])
+}
+
+enum ConvoStatus {
+  ACTIVE
+  COMPLETED
+  HANDOFF
+  ABANDONED
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  direction      Direction
+  body           String
+  raw            Json?
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+enum Direction {
+  IN
+  OUT
+}
+
+// ---------- Scheduling ----------
+model AvailabilityRule {
+  id             String  @id @default(cuid())
+  organizationId String
+  userId         String?
+  weekday        Int
+  startMinute    Int
+  endMinute      Int
+  slotMinutes    Int     @default(30)
+  bufferMinutes  Int     @default(0)
+  timezone       String  @default("Asia/Jerusalem")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Appointment {
+  id             String     @id @default(cuid())
+  organizationId String
+  contactId      String
+  userId         String?
+  startsAt       DateTime
+  endsAt         DateTime
+  status         ApptStatus @default(BOOKED)
+  googleEventId  String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([startsAt])
+}
+
+enum ApptStatus {
+  BOOKED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model CalendarIntegration {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  provider       String    @default("google")
+  accessToken    String
+  refreshToken   String
+  calendarId     String?
+  expiresAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
