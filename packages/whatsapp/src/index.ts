@@ -83,3 +83,4 @@ export interface WhatsAppProvider {
 export * from "./mock-provider.js";
 export * from "./baileys-provider.js";
 export * from "./cloud-provider.js";
+export * from "./embedded-signup.js";

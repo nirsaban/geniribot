@@ -4,6 +4,7 @@ import { BotStatus, getBotReadiness } from "@/components/BotStatus";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { withBase } from "@/lib/basePath";
 import { he } from "@/lib/he";
+import { metaPublicConfig } from "@/lib/meta";
 import { getSession } from "@/lib/session";
 import {
   createCloudConnectionAction,
@@ -11,6 +12,7 @@ import {
   logoutConnectionAction,
   reconnectAction,
 } from "./actions";
+import { EmbeddedSignupButton } from "./EmbeddedSignupButton";
 import { QrPoller } from "./QrPoller";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +29,7 @@ export default async function ConnectionsPage() {
   const origin = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";
   const webhookUrl = `${origin}${withBase("/api/webhooks/whatsapp")}`;
   const readiness = await getBotReadiness(session.org);
+  const meta = await metaPublicConfig();
 
   return (
     <>
@@ -43,21 +46,43 @@ export default async function ConnectionsPage() {
           </form>
         </div>
 
-        {/* Cloud API (official) */}
+        {/* Cloud API (official) — Embedded Signup one-click, manual paste as fallback */}
         <div className="card-p">
-          <h2 className="flex items-center gap-2 font-semibold text-ink">✅ {he.providerCloud}</h2>
-          <p className="mb-3 mt-1 text-xs text-slate-500">{he.cloudDesc}</p>
-          <form action={createCloudConnectionAction} className="space-y-2">
-            <input name="label" placeholder={he.connectionLabel} className="input !py-2 text-sm" />
-            <input name="phone_number_id" placeholder={he.cloudPhoneId} dir="ltr" className="input !py-2 text-left text-sm" />
-            <input name="access_token" type="password" placeholder={he.cloudToken} dir="ltr" autoComplete="off" className="input !py-2 text-left text-sm" />
-            <input name="verify_token" placeholder={he.cloudVerify} dir="ltr" className="input !py-2 text-left text-sm" />
-            <button className="btn-primary w-full !bg-brand-dark">{he.cloudCreate}</button>
-          </form>
-          <div className="mt-3 rounded-lg bg-slate-50 p-2 text-[11px]">
-            <div className="font-medium text-slate-600">{he.cloudWebhookTitle}</div>
-            <code dir="ltr" className="block break-all text-slate-500">{webhookUrl}</code>
-          </div>
+          <h2 className="flex items-center gap-2 font-semibold text-ink">
+            ✅ {he.providerCloud}
+            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-700">
+              {he.esRecommended}
+            </span>
+          </h2>
+          <p className="mb-3 mt-1 text-xs text-slate-500">{he.esDesc}</p>
+
+          {meta ? (
+            <EmbeddedSignupButton
+              appId={meta.appId}
+              configId={meta.configId}
+              graphVersion={meta.graphVersion}
+            />
+          ) : (
+            <p className="rounded-lg bg-amber-50 p-2 text-[11px] text-amber-700">
+              {he.esNotConfigured}
+            </p>
+          )}
+
+          {/* Advanced: manual token paste (BYO Cloud API token). */}
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs text-slate-500">{he.esAdvanced}</summary>
+            <form action={createCloudConnectionAction} className="mt-2 space-y-2">
+              <input name="label" placeholder={he.connectionLabel} className="input !py-2 text-sm" />
+              <input name="phone_number_id" placeholder={he.cloudPhoneId} dir="ltr" className="input !py-2 text-left text-sm" />
+              <input name="access_token" type="password" placeholder={he.cloudToken} dir="ltr" autoComplete="off" className="input !py-2 text-left text-sm" />
+              <input name="verify_token" placeholder={he.cloudVerify} dir="ltr" className="input !py-2 text-left text-sm" />
+              <button className="btn-primary w-full !bg-brand-dark">{he.cloudCreate}</button>
+            </form>
+            <div className="mt-3 rounded-lg bg-slate-50 p-2 text-[11px]">
+              <div className="font-medium text-slate-600">{he.cloudWebhookTitle}</div>
+              <code dir="ltr" className="block break-all text-slate-500">{webhookUrl}</code>
+            </div>
+          </details>
         </div>
       </div>
 

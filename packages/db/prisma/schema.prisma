@@ -86,6 +86,9 @@ model WhatsAppConnection {
   status         WaStatus @default(PENDING)
   authState      Json?
   defaultFlowId  String?
+  // Cloud API / Embedded Signup metadata (null for Baileys connections).
+  wabaId             String?
+  displayPhoneNumber String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

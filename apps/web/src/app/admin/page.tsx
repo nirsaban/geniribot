@@ -4,10 +4,18 @@ import { prisma } from "@kesher/db";
 import { Card, PageHeader, Stat } from "@/components/ui";
 import { GROW_SECRETS, platformOrgId } from "@/lib/billing";
 import { he } from "@/lib/he";
-import { secretMask } from "@/lib/secrets";
+import { META_SECRETS } from "@/lib/meta";
+import { getSecret, secretMask } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
 import { GrowSecrets } from "../dashboard/settings/GrowSecrets";
-import { removePlatformGrowAction, savePlatformGrowAction, setOrgPlanAction } from "./actions";
+import {
+  removePlatformGrowAction,
+  removePlatformMetaAction,
+  savePlatformGrowAction,
+  savePlatformMetaAction,
+  setOrgPlanAction,
+} from "./actions";
+import { MetaSecrets } from "./MetaSecrets";
 import { PaymentLink } from "./PaymentLink";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +42,17 @@ export default async function AdminPage() {
         secretMask(platformId, GROW_SECRETS.apiKey),
       ])
     : [null, null, null];
+
+  const [metaAppIdMask, metaAppSecretMask, metaConfigIdMask, metaVerifyMask, metaGraphVersion] =
+    platformId
+      ? await Promise.all([
+          secretMask(platformId, META_SECRETS.appId),
+          secretMask(platformId, META_SECRETS.appSecret),
+          secretMask(platformId, META_SECRETS.configId),
+          secretMask(platformId, META_SECRETS.webhookVerifyToken),
+          getSecret(platformId, META_SECRETS.graphVersion),
+        ])
+      : [null, null, null, null, null];
 
   const fmt = (d: Date) => new Intl.DateTimeFormat("he-IL", { dateStyle: "short" }).format(d);
 
@@ -110,6 +129,23 @@ export default async function AdminPage() {
             apiKeyMask={apiKeyMask}
             saveAction={savePlatformGrowAction}
             removeAction={removePlatformGrowAction}
+          />
+        </Card>
+      </div>
+
+      {/* Platform Meta / Embedded Signup config */}
+      <div className="mt-6">
+        <h2 className="mb-1 font-semibold text-ink">{he.platformMeta}</h2>
+        <p className="mb-3 text-sm text-slate-500">{he.platformMetaDesc}</p>
+        <Card>
+          <MetaSecrets
+            appIdMask={metaAppIdMask}
+            appSecretMask={metaAppSecretMask}
+            configIdMask={metaConfigIdMask}
+            verifyTokenMask={metaVerifyMask}
+            graphVersion={metaGraphVersion}
+            saveAction={savePlatformMetaAction}
+            removeAction={removePlatformMetaAction}
           />
         </Card>
       </div>

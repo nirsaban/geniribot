@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { withBase } from "@/lib/basePath";
 import { he } from "@/lib/he";
+import { EmbeddedSignupButton } from "../connections/EmbeddedSignupButton";
 import { saveCalcomLinkAction, useInChatBookingAction } from "./actions";
 
 interface Props {
@@ -11,12 +12,13 @@ interface Props {
   googleConnected: boolean;
   googleConfigured: boolean;
   calcomLink: string | null;
+  meta: { appId: string; configId: string; graphVersion: string } | null;
   finish: () => Promise<void>;
 }
 
 type CalMode = "chat" | "google" | "calcom";
 
-export function OnboardingWizard({ connected, googleConnected, googleConfigured, calcomLink, finish }: Props) {
+export function OnboardingWizard({ connected, googleConnected, googleConfigured, calcomLink, meta, finish }: Props) {
   const [step, setStep] = useState(0);
   const [calMode, setCalMode] = useState<CalMode>(calcomLink ? "calcom" : googleConnected ? "google" : "chat");
 
@@ -52,15 +54,37 @@ export function OnboardingWizard({ connected, googleConnected, googleConfigured,
           </Stage>
         )}
 
-        {/* Step 1 — WhatsApp */}
+        {/* Step 1 — WhatsApp: official one-click (recommended) vs quick QR */}
         {step === 1 && (
           <Stage emoji="💬" title={he.wizWhatsappTitle} body={he.wizWhatsappBody}>
             {connected ? (
               <div className="badge-green mx-auto">{he.wizWhatsappDone}</div>
             ) : (
-              <Link href="/dashboard/connections" target="_blank" className="btn-primary w-full">
-                {he.wizWhatsappCta} ↗
-              </Link>
+              <div className="space-y-3 text-right">
+                {meta && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm font-semibold text-ink">{he.wizWhatsappOfficial}</span>
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-700">
+                        {he.esRecommended}
+                      </span>
+                    </div>
+                    <p className="mb-2 text-xs text-slate-500">{he.esDesc}</p>
+                    <EmbeddedSignupButton
+                      appId={meta.appId}
+                      configId={meta.configId}
+                      graphVersion={meta.graphVersion}
+                    />
+                  </div>
+                )}
+                <Link
+                  href="/dashboard/connections"
+                  target="_blank"
+                  className={meta ? "btn-secondary btn-sm w-full" : "btn-primary w-full"}
+                >
+                  {meta ? he.wizWhatsappQr : he.wizWhatsappCta} ↗
+                </Link>
+              </div>
             )}
           </Stage>
         )}

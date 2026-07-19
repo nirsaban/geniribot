@@ -67,6 +67,19 @@ export const he = {
   platformGrowDesc: "מפתחות Grow ברמת הפלטפורמה. רק אתה (מנהל-על) רואה זאת. לקוחות אינם נחשפים לתשלום.",
   backToApp: "→ לאזור הלקוח",
 
+  // platform Meta / Embedded Signup config
+  platformMeta: "הגדרות WhatsApp רשמי (Meta) — פלטפורמה",
+  platformMetaDesc: "פרטי אפליקציית ה-Meta ל-Embedded Signup. ברגע שמוגדרים, לקוחות יראו את כפתור \"התחברות עם פייסבוק\" בעמוד החיבורים.",
+  howToGetMeta: "איך משיגים את הפרטים?",
+  metaStep1: "צור אפליקציית Meta (סוג Business) ב-developers.facebook.com והוסף את מוצרי WhatsApp + Facebook Login for Business.",
+  metaStep2: "השלם אימות עסק (Business Verification) ובקש Advanced Access להרשאות whatsapp_business_management + whatsapp_business_messaging.",
+  metaStep3: "צור תצורת Embedded Signup (מקבל config_id), והגדר את כתובת ה-Webhook + Verify Token באפליקציה.",
+  metaAppId: "App ID",
+  metaAppSecret: "App Secret",
+  metaConfigId: "Embedded Signup Config ID",
+  metaVerifyToken: "Webhook Verify Token",
+  metaGraphVersion: "Graph API Version (למשל v21.0)",
+
   // bot readiness status
   statusLive: "הבוט פעיל ועונה ללקוחות",
   statusLiveHint: "שלח/י הודעת בדיקה למספר המחובר כדי לראות את הבוט בפעולה.",
@@ -110,6 +123,18 @@ export const he = {
   cloudWebhookTitle: "כתובת Webhook להגדרה ב-Meta",
   cloudWebhookHint: "הדבק/י את הכתובת הזו + ה-Verify Token בהגדרות ה-Webhook של אפליקציית ה-Meta שלך.",
   cloudViaLabel: "רשמי (Cloud API)",
+
+  // embedded signup (one-click official onboarding)
+  esTitle: "חיבור רשמי בלחיצה אחת",
+  esDesc: "התחבר/י עם פייסבוק ו-Meta תיצור עבורך את חשבון ה-WhatsApp Business, המספר והאישורים — אוטומטית.",
+  esButton: "התחברות עם פייסבוק",
+  esConnecting: "מתחבר…",
+  esRecommended: "מומלץ",
+  esAdvanced: "הזנה ידנית (מתקדם)",
+  esCancelled: "החיבור לא הושלם. אפשר לנסות שוב.",
+  esFailed: "החיבור נכשל. בדוק/י את הפרטים ונסה/י שוב.",
+  esNotConfigured: "החיבור הרשמי עדיין לא הוגדר על ידי מנהל המערכת.",
+  esSuccess: "המספר חובר בהצלחה! 🎉",
 
   // leads / CRM
   leadsTitle: "לידים",
@@ -156,6 +181,8 @@ export const he = {
   // billing / plans
   billing: "מנוי ותשלום",
   billingTitle: "בחירת מסלול",
+  choosePlanTitle: "ברוך/ה הבא/ה! בחר/י מסלול כדי להתחיל",
+  choosePlanSubtitle: "אפשר להתחיל בחינם ולשדרג בכל עת. אחרי בחירת מסלול נמשיך להקמת הבוט.",
   currentPlan: "המסלול הנוכחי",
   perMonth: "לחודש",
   free: "חינם",
@@ -215,6 +242,8 @@ export const he = {
   wizWhatsappTitle: "חברו מספר וואטסאפ",
   wizWhatsappBody: "המספר שדרכו לקוחות כותבים אליכם. לחצו לחיבור וסרקו את ה-QR.",
   wizWhatsappCta: "לחיבור המספר",
+  wizWhatsappOfficial: "חיבור רשמי (מומלץ)",
+  wizWhatsappQr: "או חיבור מהיר עם QR",
   wizWhatsappDone: "מספר מחובר ✅",
   wizAvailTitle: "שעות פעילות לפגישות",
   wizAvailBody: "הבוט יציע ללקוחות מועדים פנויים לפי הזמינות שלכם (ברירת מחדל: א׳–ה׳ 09:00–17:00). אפשר לשנות בהמשך.",

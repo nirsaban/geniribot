@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { PLANS, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { GROW_SECRETS } from "@/lib/billing";
+import { META_SECRETS } from "@/lib/meta";
 import { deleteSecret, setSecret } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
 
@@ -39,5 +40,25 @@ export async function savePlatformGrowAction(formData: FormData): Promise<void> 
 export async function removePlatformGrowAction(): Promise<void> {
   const { org } = await requireSuperAdmin();
   for (const name of Object.values(GROW_SECRETS)) await deleteSecret(org, name);
+  revalidatePath("/admin");
+}
+
+/** Save the PLATFORM Meta / Embedded Signup config (stored on the platform org). */
+export async function savePlatformMetaAction(formData: FormData): Promise<void> {
+  const { org } = await requireSuperAdmin();
+  const map: Array<[string, string]> = [
+    [META_SECRETS.appId, String(formData.get("app_id") ?? "").trim()],
+    [META_SECRETS.appSecret, String(formData.get("app_secret") ?? "").trim()],
+    [META_SECRETS.configId, String(formData.get("config_id") ?? "").trim()],
+    [META_SECRETS.webhookVerifyToken, String(formData.get("verify_token") ?? "").trim()],
+    [META_SECRETS.graphVersion, String(formData.get("graph_version") ?? "").trim()],
+  ];
+  for (const [name, value] of map) if (value) await setSecret(org, name, value);
+  revalidatePath("/admin");
+}
+
+export async function removePlatformMetaAction(): Promise<void> {
+  const { org } = await requireSuperAdmin();
+  for (const name of Object.values(META_SECRETS)) await deleteSecret(org, name);
   revalidatePath("/admin");
 }
