@@ -30,6 +30,9 @@ const HOUR = 3600 * 1000;
 const LOOP_WINDOW_MS = 60_000;
 const LOOP_MAX_REPLIES = 8;
 
+/** Quiet period required before a finished flow will restart itself. */
+const RESTART_COOLDOWN_MS = 60_000;
+
 const log = childLogger("worker:inbound");
 
 /**
@@ -38,8 +41,49 @@ const log = childLogger("worker:inbound");
  * @kesher/flow-engine; the booking pause (offer slots → capture choice → create
  * appointment → resume) is handled here because it needs DB I/O.
  */
+/**
+ * Is this sender one of our own WhatsApp connections?
+ *
+ * Two bots on this platform must never hold a conversation. It happens easily:
+ * a business tests their bot from a phone that is itself paired as a connection
+ * (their own, or another tenant's), and each bot's reply is the other's inbound.
+ * Neither retries nor rate limits stop that cleanly — the messages parse fine,
+ * so the flow advances, completes, restarts, and runs forever at whatever pace
+ * the round trip allows.
+ *
+ * Checked platform-wide rather than per-organization, because the two ends are
+ * usually in *different* organizations — that is exactly what makes it look
+ * like ordinary lead traffic.
+ */
+async function isPlatformNumber(from: string, fromJid?: string): Promise<boolean> {
+  const candidates = [from];
+  const jidUser = fromJid?.split("@")[0];
+  if (jidUser && jidUser !== from) candidates.push(jidUser);
+
+  const hit = await prisma.whatsAppConnection.findFirst({
+    where: {
+      OR: [
+        { phoneNumber: { in: candidates } },
+        { displayPhoneNumber: { in: candidates } },
+      ],
+    },
+    select: { id: true, organizationId: true, phoneNumber: true },
+  });
+  if (hit) {
+    log.warn(
+      { from, fromJid, connectionId: hit.id, ownerOrg: hit.organizationId },
+      "inbound from one of our own connections — not replying (bot-to-bot loop guard)",
+    );
+  }
+  return Boolean(hit);
+}
+
 export async function processInbound(job: InboundJob): Promise<void> {
   const { organizationId, connectionId, from, fromJid, senderPn, text } = job;
+
+  // Before anything else, and before any message is stored: a bot talking to a
+  // bot is never a lead.
+  if (await isPlatformNumber(from, fromJid)) return;
 
   // When a LID chat resolved to a real number, `from` is that number and the
   // LID is what any earlier contact was filed under.
@@ -84,6 +128,27 @@ export async function processInbound(job: InboundJob): Promise<void> {
   const flow = FlowDefinition.parse(flowRow.definition);
 
   if (!convo) {
+    // About to start a fresh run. If this contact only just finished one, stay
+    // quiet: complete → restart → complete is a loop engine against any
+    // auto-responder, and because a finished conversation is replaced rather
+    // than reused, the evidence lives on the *previous* conversation rather
+    // than on the state we are about to build.
+    //
+    // A returning lead clears a one-minute gap without noticing; a bot
+    // answering in seconds never does.
+    const previous = await prisma.conversation.findFirst({
+      where: { organizationId, contactId: contact.id },
+      orderBy: { lastMessageAt: "desc" },
+      select: { id: true, lastMessageAt: true },
+    });
+    if (previous && previous.lastMessageAt.getTime() > Date.now() - RESTART_COOLDOWN_MS) {
+      log.warn(
+        { contactId: contact.id, previousConversationId: previous.id },
+        "flow finished moments ago — not restarting (loop guard)",
+      );
+      return;
+    }
+
     convo = await prisma.conversation.create({
       data: {
         organizationId,
@@ -165,6 +230,7 @@ export async function processInbound(job: InboundJob): Promise<void> {
     prevState.currentNodeId === undefined ||
     prevState.currentNodeId === null ||
     prevState.status === "completed";
+
   const result = finished ? start(flow) : step(flow, normalizeState(prevState), { text });
   await applyAndPersist(flow, result, ctx);
 }
