@@ -351,6 +351,131 @@ export const he = {
   fElse: "אם לא →",
   fAction: "פעולה",
   fNext: "השלב הבא →",
+
+  // lead pipeline
+  colStatus: "סטטוס",
+  colOwner: "אחראי",
+  colUpdated: "עודכן",
+  leadStatus: {
+    NEW: "חדש",
+    CONTACTED: "יצרנו קשר",
+    QUALIFIED: "מתאים",
+    MEETING_SET: "נקבעה פגישה",
+    WON: "נסגר ✅",
+    LOST: "לא רלוונטי",
+  },
+  unassigned: "לא משויך",
+  assignOwner: "שיוך לאחראי",
+  changeStatus: "שינוי סטטוס",
+
+  // filters
+  filters: "סינון",
+  filterStatus: "סטטוס",
+  filterOwner: "אחראי",
+  filterScenario: "תסריט",
+  filterTag: "תגית",
+  filterFrom: "מתאריך",
+  filterTo: "עד תאריך",
+  sortLabel: "מיון",
+  sortNewest: "החדשים ביותר",
+  sortOldest: "הישנים ביותר",
+  sortActivity: "פעילות אחרונה",
+  sortUpdated: "עודכנו לאחרונה",
+  applyFilters: "סנן",
+  clearFilters: "נקה סינון",
+  anyValue: "הכול",
+  noResults: "לא נמצאו לידים שתואמים לסינון.",
+
+  // bulk actions + export
+  selectAll: "בחר/י הכול",
+  selectedCount: "נבחרו",
+  bulkAssign: "שייך ל…",
+  bulkStatus: "שנה סטטוס ל…",
+  bulkApply: "החל",
+  bulkNothingSelected: "לא נבחרו לידים",
+  exportCsv: "ייצוא ל-CSV",
+
+  // pagination
+  prevPage: "→ הקודם",
+  nextPage: "הבא ←",
+  showing: "מציג",
+  of: "מתוך",
+
+  // call summary (agent-entered after the sales call)
+  callSummaryTitle: "סיכום שיחת מכירה",
+  callSummaryHint: "מה סוכם בשיחה? הסיכום נשמר על הליד ונראה לכל הצוות.",
+  callSummaryPlaceholder: "לדוגמה: מעוניין בחבילה המורחבת, לחזור אליו בשבוע הבא…",
+  callSummarySave: "שמור סיכום",
+  callSummaryEmpty: "עדיין לא נרשם סיכום שיחה.",
+  callSummaryBy: "נרשם על ידי",
+
+  // notes
+  notesTitle: "הערות",
+  addNote: "הוסף הערה",
+  notePlaceholder: "הערה פנימית על הליד…",
+  noNotes: "אין הערות עדיין.",
+  deleteNote: "מחק",
+
+  // activity timeline
+  timelineTitle: "היסטוריית פעילות",
+  noActivity: "אין פעילות עדיין.",
+  byBot: "הבוט",
+  activityKind: {
+    LEAD_CREATED: "הליד נוצר",
+    STATUS_CHANGED: "שינוי סטטוס",
+    OWNER_ASSIGNED: "שיוך אחראי",
+    NOTE_ADDED: "נוספה הערה",
+    SUMMARY_SAVED: "נשמר סיכום שיחה",
+    TAGS_CHANGED: "עודכנו תגיות",
+    APPOINTMENT_BOOKED: "נקבעה פגישה",
+    CONVERSATION_COMPLETED: "השיחה עם הבוט הסתיימה",
+  },
+
+  // team / users
+  team: "צוות",
+  teamTitle: "ניהול צוות",
+  teamSubtitle: "הוסף/י אנשי מכירות ונהל/י הרשאות",
+  teamMembers: "חברי צוות",
+  roleLabel: {
+    OWNER: "בעלים",
+    ADMIN: "מנהל",
+    AGENT: "נציג",
+  },
+  roleHint: {
+    OWNER: "גישה מלאה, כולל חיוב ומחיקת העסק.",
+    ADMIN: "ניהול לידים, תסריטים, חיבורים וצוות.",
+    AGENT: "עבודה על לידים בלבד.",
+  },
+  changeRole: "שנה תפקיד",
+  removeMember: "הסר",
+  removeMemberConfirm: "להסיר את חבר הצוות?",
+  youBadge: "את/ה",
+  inviteTitle: "הזמנת חבר צוות",
+  inviteEmail: "אימייל (אופציונלי — לשליחה במייל)",
+  inviteRole: "תפקיד",
+  inviteCreate: "צור הזמנה",
+  inviteLinkTitle: "קישור ההזמנה",
+  inviteLinkHint: "העתק/י ושלח/י בוואטסאפ. הקישור חד־פעמי ותקף ל־7 ימים.",
+  inviteEmailSent: "ההזמנה נשלחה גם במייל ✉️",
+  inviteEmailFailed: "ההזמנה נוצרה, אך שליחת המייל נכשלה — אפשר להעתיק את הקישור.",
+  invitesPending: "הזמנות ממתינות",
+  inviteRevoke: "בטל",
+  inviteExpiresAt: "בתוקף עד",
+  noInvites: "אין הזמנות ממתינות.",
+  acceptInviteTitle: "הצטרפות לצוות",
+  acceptInviteSubtitle: "בחר/י סיסמה כדי להשלים את ההצטרפות",
+  acceptInviteCta: "הצטרף/י לצוות",
+  passwordTooShort: "הסיסמה חייבת להכיל לפחות 6 תווים.",
+  inviteInvalid: "ההזמנה אינה תקפה או שכבר נוצלה.",
+  inviteExpired: "תוקף ההזמנה פג. בקש/י הזמנה חדשה.",
+  inviteEmailTaken: "כתובת המייל הזו כבר רשומה במערכת.",
+  onlyOwnerCan: "רק בעלים או מנהל יכולים לבצע פעולה זו.",
+  cannotRemoveSelf: "אי אפשר להסיר את עצמך.",
+  cannotRemoveLastOwner: "חייב להישאר בעלים אחד לפחות.",
+
+  // nav (mobile)
+  openMenu: "תפריט",
+  closeMenu: "סגירה",
 } as const;
 
 export type HeKey = keyof typeof he;

@@ -41,12 +41,14 @@ export default async function SettingsPage({
 
       <div className="space-y-4">
         <Card>
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          {/* Stacks below sm: the "not configured" badge is a full sentence, and
+              `shrink-0` on one row pins the card to its max-content width. */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0">
               <h2 className="flex items-center gap-2 font-semibold text-ink">📆 {he.googleCalendar}</h2>
               <p className="mt-1 text-sm text-slate-500">{he.googleCalendarDesc}</p>
             </div>
-            <div className="shrink-0">
+            <div className="sm:shrink-0">
               {!configured ? (
                 <span className="badge-amber">{he.googleNotConfigured}</span>
               ) : integration ? (
@@ -68,8 +70,8 @@ export default async function SettingsPage({
         <Card>
           <h2 className="flex items-center gap-2 font-semibold text-ink">🔗 {he.wizCalCalcom}</h2>
           <p className="mb-3 mt-1 text-sm text-slate-500">{he.wizCalCalcomDesc}</p>
-          <form action={saveCalcomLinkAction} className="flex gap-2">
-            <input name="calcom" defaultValue={org?.calcomLink ?? ""} dir="ltr" placeholder={he.calcomLinkPlaceholder} className="input text-left" />
+          <form action={saveCalcomLinkAction} className="flex flex-wrap gap-2">
+            <input name="calcom" defaultValue={org?.calcomLink ?? ""} dir="ltr" placeholder={he.calcomLinkPlaceholder} className="input min-w-0 flex-1 text-left" />
             <button className="btn-primary shrink-0">{he.saveSecret}</button>
           </form>
         </Card>
