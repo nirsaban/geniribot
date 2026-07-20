@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLeadWhere,
+  callbackPhone,
   formatFieldValue,
+  isHiddenNumber,
   leadVisibility,
   STALE_DAYS,
   toCsv,
@@ -119,6 +121,60 @@ describe("buildLeadWhere", () => {
 
   it("uses a stale window of a week", () => {
     expect(STALE_DAYS).toBe(7);
+  });
+});
+
+describe("isHiddenNumber", () => {
+  it("flags a LID-addressed contact", () => {
+    expect(isHiddenNumber({ phone: "14396898152593", waJid: "14396898152593@lid" })).toBe(true);
+  });
+
+  it("does not flag a real number", () => {
+    expect(isHiddenNumber({ phone: "972532898849", waJid: "972532898849@s.whatsapp.net" })).toBe(
+      false,
+    );
+  });
+
+  it("trusts waJid over length when it is present", () => {
+    // A short LID is still a LID, and a long-but-real number is still real.
+    expect(isHiddenNumber({ phone: "123", waJid: "123@lid" })).toBe(true);
+    expect(isHiddenNumber({ phone: "12345678901234", waJid: "12345678901234@s.whatsapp.net" })).toBe(
+      false,
+    );
+  });
+
+  it("falls back to length for rows saved before waJid existed", () => {
+    // Real LIDs seen in production (14–15 digits).
+    expect(isHiddenNumber({ phone: "14396898152593", waJid: null })).toBe(true);
+    expect(isHiddenNumber({ phone: "244808924831934", waJid: null })).toBe(true);
+    // Real numbers: Israeli (12) and long international (13).
+    expect(isHiddenNumber({ phone: "972532898849", waJid: null })).toBe(false);
+    expect(isHiddenNumber({ phone: "9725328988491", waJid: null })).toBe(false);
+  });
+});
+
+describe("callbackPhone", () => {
+  const phoneSpec = spec({ key: "callback", expect: "phone" });
+
+  it("returns an answer the scenario collected as a phone", () => {
+    expect(callbackPhone({ callback: "0532898849" }, [phoneSpec])).toBe("0532898849");
+  });
+
+  it("ignores fields that are not declared as phones", () => {
+    expect(callbackPhone({ city: "חיפה" }, [spec({ key: "city" })])).toBeNull();
+  });
+
+  it("accepts a numeric answer", () => {
+    expect(callbackPhone({ callback: 532898849 }, [phoneSpec])).toBe("532898849");
+  });
+
+  it("skips blank answers rather than returning whitespace", () => {
+    expect(callbackPhone({ callback: "   " }, [phoneSpec])).toBeNull();
+  });
+
+  it("is null-safe on a missing or non-object field bag", () => {
+    expect(callbackPhone(null, [phoneSpec])).toBeNull();
+    expect(callbackPhone("nope", [phoneSpec])).toBeNull();
   });
 });
 

@@ -5,9 +5,12 @@ import { prisma } from "@kesher/db";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
+import type { FieldSpec } from "@kesher/flow-engine";
 import {
   buildLeadWhere,
+  callbackPhone,
   formatFieldValue,
+  isHiddenNumber,
   isLeadSort,
   LEAD_SORTS,
   LEAD_STATUSES,
@@ -28,6 +31,32 @@ function fmtDate(d: Date): string {
 }
 
 type Params = LeadFilters & { sort?: string; page?: string };
+
+/**
+ * A LID contact has no dialable number, so show what it actually is rather than
+ * printing an opaque id under a "phone" heading. When the scenario asked the
+ * lead for a phone, that answer is the real number and is shown instead.
+ */
+function PhoneCell({
+  contact,
+  specs,
+}: {
+  contact: { phone: string; waJid: string | null; fields: unknown };
+  specs: FieldSpec[];
+}) {
+  if (!isHiddenNumber(contact)) {
+    return <span dir="ltr">{contact.phone}</span>;
+  }
+  const given = callbackPhone(contact.fields, specs);
+  if (given) {
+    return <span dir="ltr">{given}</span>;
+  }
+  return (
+    <span className="badge-gray" title={he.hiddenNumberHint}>
+      🔒 {he.hiddenNumber}
+    </span>
+  );
+}
 
 /** Preserve the active filters when linking to export / other pages. */
 function queryString(params: Params, extra: Record<string, string> = {}): string {
@@ -308,8 +337,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                           {c.name || "—"}
                         </Link>
                       </td>
-                      <td className="p-3 text-slate-500" dir="ltr">
-                        {c.phone}
+                      <td className="p-3 text-slate-500">
+                        <PhoneCell contact={c} specs={[...specByKey.values()]} />
                       </td>
                       <td className="p-3">
                         <Badge tone={statusTone(c.status)}>{he.leadStatus[c.status]}</Badge>
@@ -353,8 +382,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                     <Link href={`/dashboard/leads/${c.id}`} className="font-semibold text-ink">
                       {c.name || "—"}
                     </Link>
-                    <div className="mt-0.5 text-sm text-slate-500" dir="ltr">
-                      {c.phone}
+                    <div className="mt-0.5 text-sm text-slate-500">
+                      <PhoneCell contact={c} specs={[...specByKey.values()]} />
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <Badge tone={statusTone(c.status)}>{he.leadStatus[c.status]}</Badge>

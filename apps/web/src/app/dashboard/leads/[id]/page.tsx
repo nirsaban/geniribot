@@ -6,7 +6,9 @@ import { Badge, Card } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
 import {
+  callbackPhone,
   formatFieldValue,
+  isHiddenNumber,
   LEAD_STATUSES,
   leadVisibility,
   schemaOf,
@@ -98,6 +100,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
    * the schema is appended so nothing collected is ever hidden.
    */
   const specs = sourceFlow ? schemaOf(sourceFlow) : [];
+  const hidden = isHiddenNumber(contact);
+  const given = callbackPhone(contact.fields, specs);
   const known = new Set(specs.map((s) => s.key));
   const extras = Object.keys(values).filter((k) => !known.has(k) && values[k] !== "");
 
@@ -111,11 +115,31 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       <div className="mb-6 mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink">
-            {contact.name || contact.phone}
+            {contact.name || (hidden ? he.hiddenNumber : contact.phone)}
           </h1>
-          <p className="mt-1 text-sm text-slate-500" dir="ltr">
-            {contact.phone}
-          </p>
+          {hidden ? (
+            <div className="mt-1">
+              {given ? (
+                <p className="text-sm text-slate-500">
+                  {he.callbackPhoneLabel}:{" "}
+                  <span dir="ltr" className="font-medium text-ink">
+                    {given}
+                  </span>
+                </p>
+              ) : (
+                <p className="max-w-prose text-xs text-slate-400">🔒 {he.hiddenNumberHint}</p>
+              )}
+              {/* The LID still identifies the chat, so keep it available for
+                  support — just not labelled as a phone number. */}
+              <p className="mt-1 text-[11px] text-slate-300" dir="ltr">
+                {he.waIdLabel}: {contact.phone}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 text-sm text-slate-500" dir="ltr">
+              {contact.phone}
+            </p>
+          )}
         </div>
         <Badge tone={statusTone(contact.status)}>{he.leadStatus[contact.status]}</Badge>
       </div>

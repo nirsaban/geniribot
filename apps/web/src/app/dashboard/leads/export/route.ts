@@ -5,7 +5,9 @@ import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
 import {
   buildLeadWhere,
+  callbackPhone,
   formatFieldValue,
+  isHiddenNumber,
   isLeadSort,
   LEAD_SORTS,
   loadScenarioSchemas,
@@ -56,6 +58,7 @@ export async function GET(req: Request): Promise<Response> {
   const headers = [
     he.colName,
     he.colPhone,
+    he.waIdLabel,
     he.colStatus,
     he.colOwner,
     he.colSource,
@@ -69,9 +72,14 @@ export async function GET(req: Request): Promise<Response> {
 
   const rows = contacts.map((c) => {
     const fields = (c.fields ?? {}) as Record<string, unknown>;
+    // Export what the number actually is: a dialable number when we have one,
+    // otherwise blank rather than an opaque LID that looks like a phone.
+    const hidden = isHiddenNumber(c);
+    const dialable = hidden ? (callbackPhone(fields, specs) ?? "") : c.phone;
     return [
       c.name ?? "",
-      c.phone,
+      dialable,
+      hidden ? c.phone : "",
       he.leadStatus[c.status],
       c.owner ? (c.owner.name ?? c.owner.email) : "",
       c.source ?? "",

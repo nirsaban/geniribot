@@ -82,6 +82,50 @@ export function formatFieldValue(spec: FieldSpec | undefined, value: unknown): s
   return String(value);
 }
 
+/**
+ * True when `Contact.phone` holds a WhatsApp LID rather than a real number.
+ *
+ * LID ("hidden number") senders arrive as an opaque id like
+ * `14396898152593@lid`, and the user part of that is what lands in `phone`.
+ * Rendering it in a column headed "טלפון" is simply wrong — it is not a number
+ * anyone can dial, and it is not derived from one.
+ */
+export function isHiddenNumber(contact: { phone: string; waJid?: string | null }): boolean {
+  // Exact for anything stored since waJid was added.
+  if (contact.waJid) return contact.waJid.endsWith("@lid");
+
+  // Older rows have no waJid, so fall back to length. Israeli numbers are 12
+  // digits (972…) and international ones run to 13; the LIDs WhatsApp issues
+  // are 14–15. The threshold sits in that gap.
+  //
+  // Imperfect by nature: a genuine 14-digit international number would be
+  // mislabelled. That is the safer direction to err — calling a real number
+  // "hidden" is a visible annoyance, whereas printing a LID as a phone number
+  // sends someone off to dial digits that were never a phone number.
+  return contact.phone.replace(/\D/g, "").length > 13;
+}
+
+/**
+ * A number the lead actually gave us, if the scenario asked for one.
+ *
+ * Any question declared `expect: "phone"` counts — which is the whole point of
+ * the per-scenario field schema: we do not need to guess at key names.
+ */
+export function callbackPhone(
+  fields: unknown,
+  specs: FieldSpec[],
+): string | null {
+  if (!fields || typeof fields !== "object") return null;
+  const bag = fields as Record<string, unknown>;
+  for (const spec of specs) {
+    if (spec.expect !== "phone") continue;
+    const v = bag[spec.key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number") return String(v);
+  }
+  return null;
+}
+
 /** Filter state, parsed straight from the URL's search params. */
 export interface LeadFilters {
   q?: string;

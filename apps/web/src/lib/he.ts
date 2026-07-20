@@ -409,6 +409,13 @@ export const he = {
   callSummaryEmpty: "עדיין לא נרשם סיכום שיחה.",
   callSummaryBy: "נרשם על ידי",
 
+  // hidden (LID) numbers
+  hiddenNumber: "מספר מוסתר",
+  hiddenNumberHint:
+    "הלקוח פנה דרך WhatsApp במצב מספר מוסתר, כך שוואטסאפ לא מוסרת את מספר הטלפון שלו. אפשר לענות לו בצ׳אט כרגיל. כדי לקבל מספר לחיוג, הוסף/י שאלה מסוג ״טלפון״ לתסריט.",
+  waIdLabel: "מזהה וואטסאפ",
+  callbackPhoneLabel: "טלפון לחיוג",
+
   // analytics
   funnelTitle: "משפך המכירות",
   funnelHint: "כמה לידים בכל שלב",
