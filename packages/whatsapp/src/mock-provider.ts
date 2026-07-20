@@ -41,11 +41,17 @@ export class MockProvider implements WhatsAppProvider {
     return this.statuses.get(connectionId) ?? "pending";
   }
 
-  /** Test/dev helper: simulate an inbound message from a lead. */
+  /**
+   * Test/dev helper: simulate an inbound message from a lead. `from` may be a
+   * bare number (assumed to be a normal phone) or a full JID, so LID senders
+   * can be exercised too.
+   */
   async inject(connectionId: string, from: string, text: string): Promise<void> {
+    const fromJid = from.includes("@") ? from : `${from}@s.whatsapp.net`;
     await this.handlers.onInbound({
       connectionId,
-      from,
+      from: from.split("@")[0] ?? from,
+      fromJid,
       text,
       externalId: `mock-${from}-${text.length}`,
       timestamp: 0,

@@ -21,6 +21,16 @@ export interface InboundMessage {
   connectionId: string;
   /** Sender phone in E.164-ish digits (no whatsapp suffix). */
   from: string;
+  /**
+   * The sender's full addressable JID, domain included — e.g.
+   * `972501234567@s.whatsapp.net` or `14396898152593@lid`.
+   *
+   * `from` alone is NOT routable: WhatsApp's LID ("hidden number") addressing
+   * hands us an opaque id whose domain is `@lid`, and re-attaching the default
+   * `@s.whatsapp.net` builds a JID for a phone number that does not exist —
+   * Baileys then sends into the void without throwing. Reply to `fromJid`.
+   */
+  fromJid: string;
   text: string;
   /** Provider message id, for idempotency. */
   externalId: string;
@@ -33,6 +43,12 @@ export interface InboundMessage {
 export interface OutboundMessage {
   connectionId: string;
   to: string;
+  /**
+   * Full destination JID, when the caller knows it (see `InboundMessage.fromJid`).
+   * Takes precedence over `to` for JID-addressed providers (Baileys). The Cloud
+   * API addresses by phone number and ignores this.
+   */
+  toJid?: string;
   text: string;
 }
 

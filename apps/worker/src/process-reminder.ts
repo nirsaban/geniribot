@@ -40,6 +40,7 @@ export async function processReminder(job: ReminderJob): Promise<void> {
     organizationId: appt.organizationId,
     connectionId: convo.connectionId,
     to: appt.contact.phone,
+    toJid: appt.contact.waJid ?? undefined,
     text,
   });
   log.info({ appointmentId: appt.id, kind: job.kind }, "reminder sent");

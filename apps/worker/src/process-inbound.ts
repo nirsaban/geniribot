@@ -31,9 +31,9 @@ const log = childLogger("worker:inbound");
  * appointment → resume) is handled here because it needs DB I/O.
  */
 export async function processInbound(job: InboundJob): Promise<void> {
-  const { organizationId, connectionId, from, text } = job;
+  const { organizationId, connectionId, from, fromJid, text } = job;
 
-  const contact = await resolveContact(organizationId, from);
+  const contact = await resolveContact(organizationId, from, fromJid);
 
   let convo = await prisma.conversation.findFirst({
     where: { organizationId, contactId: contact.id, status: "ACTIVE" },
@@ -95,6 +95,7 @@ export async function processInbound(job: InboundJob): Promise<void> {
     organizationId,
     connectionId,
     to: from,
+    toJid: fromJid ?? contact.waJid ?? undefined,
     contactId: contact.id,
     conversationId: convo.id,
     contactFields: (contact.fields as Record<string, unknown>) ?? {},
@@ -115,12 +116,19 @@ export async function processInbound(job: InboundJob): Promise<void> {
 }
 
 /** Find-or-create a contact, tolerant of the concurrent-message create race. */
-async function resolveContact(organizationId: string, phone: string) {
+async function resolveContact(organizationId: string, phone: string, waJid?: string) {
   const where = { organizationId_phone: { organizationId, phone } };
   const existing = await prisma.contact.findUnique({ where });
-  if (existing) return existing;
+  if (existing) {
+    // Backfill/refresh the routable JID — contacts created before this field
+    // existed have none, and a sender can migrate to LID addressing later.
+    if (waJid && existing.waJid !== waJid) {
+      return await prisma.contact.update({ where: { id: existing.id }, data: { waJid } });
+    }
+    return existing;
+  }
   try {
-    return await prisma.contact.create({ data: { organizationId, phone } });
+    return await prisma.contact.create({ data: { organizationId, phone, waJid } });
   } catch (err) {
     // Another message for the same new contact won the create race.
     if ((err as { code?: string }).code === "P2002") {
@@ -189,6 +197,8 @@ interface Ctx {
   organizationId: string;
   connectionId: string;
   to: string;
+  /** Routable sender JID; see InboundMessage.fromJid. */
+  toJid?: string;
   contactId: string;
   conversationId: string;
   contactFields: Record<string, unknown>;
@@ -294,6 +304,7 @@ async function sendOut(text: string, ctx: Ctx): Promise<void> {
     organizationId: ctx.organizationId,
     connectionId: ctx.connectionId,
     to: ctx.to,
+    toJid: ctx.toJid,
     text,
   });
 }

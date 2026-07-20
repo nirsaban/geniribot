@@ -67,7 +67,7 @@ app.register(async (instance) => {
 const outboundWorker = new Worker<OutboundJob>(
   OUTBOUND_QUEUE,
   async (job) => {
-    await manager.send(job.data.connectionId, job.data.to, job.data.text);
+    await manager.send(job.data.connectionId, job.data.to, job.data.text, job.data.toJid);
   },
   { connection: bullConnection, concurrency: 5 },
 );

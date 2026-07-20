@@ -54,6 +54,15 @@ interface AuthBlob {
 const RECONNECT_DELAY_MS = 3000;
 const logger = pino({ level: process.env.BAILEYS_LOG_LEVEL ?? "silent" });
 
+/**
+ * Inbound tracing. `normalizeInbound` drops messages silently by design, which
+ * makes "the bot ignored me" impossible to diagnose from logs. With
+ * WA_TRACE_INBOUND=1 every message is logged BEFORE the filters, along with the
+ * reason it was dropped (or that it was accepted).
+ */
+const TRACE_INBOUND = process.env.WA_TRACE_INBOUND === "1";
+const trace = pino({ level: "info" }).child({ service: "wa:trace" });
+
 export class BaileysProvider implements WhatsAppProvider {
   readonly name = "baileys";
   private sessions = new Map<string, Session>();
@@ -107,7 +116,9 @@ export class BaileysProvider implements WhatsAppProvider {
     if (!session || session.status !== "connected") {
       throw new Error(`connection ${msg.connectionId} is not connected`);
     }
-    await session.sock.sendMessage(toJid(msg.to), { text: msg.text });
+    // Prefer the JID we actually received the message on — `to` has had its
+    // domain stripped and cannot be reconstructed for @lid senders.
+    await session.sock.sendMessage(msg.toJid ?? toJid(msg.to), { text: msg.text });
   }
 
   // ---------- internals ----------
@@ -163,6 +174,12 @@ export class BaileysProvider implements WhatsAppProvider {
     });
 
     sock.ev.on("messages.upsert", ({ messages, type }) => {
+      // `type` is "notify" for live messages and "append" for history/sync
+      // batches; only the former is a real incoming message. Trace both so a
+      // wrong-type drop is distinguishable from nothing arriving at all.
+      if (TRACE_INBOUND) {
+        trace.info({ connectionId, type, count: messages.length }, "messages.upsert");
+      }
       if (type !== "notify") return;
       for (const m of messages) {
         const inbound = normalizeInbound(connectionId, m);
@@ -264,13 +281,28 @@ function normalizeInbound(
   m: WAMessageLike,
 ): import("./index.js").InboundMessage | null {
   const jid = m.key.remoteJid;
-  if (!jid || m.key.fromMe) return null;
+  // What kind of payload did WhatsApp actually send? Only `conversation` and
+  // `extendedTextMessage` carry text we can read; everything else is dropped
+  // below, so surfacing the key here is what makes a silent drop explainable.
+  const kinds = Object.keys((m.message ?? {}) as Record<string, unknown>);
+  const drop = (reason: string) => {
+    if (TRACE_INBOUND) {
+      trace.info({ connectionId, jid, fromMe: m.key.fromMe ?? false, kinds, reason }, "inbound dropped");
+    }
+    return null;
+  };
+
+  if (!jid || m.key.fromMe) return drop(!jid ? "no-jid" : "fromMe");
   // Skip groups, status broadcasts, newsletters — 1:1 lead chats only for MVP.
   if (jid.endsWith("@g.us") || jid === "status@broadcast" || jid.endsWith("@newsletter")) {
-    return null;
+    return drop("not-a-1:1-chat");
   }
   const text = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? null;
-  if (!text) return null;
+  if (!text) return drop(kinds.length === 0 ? "empty-message" : "unsupported-type");
+
+  if (TRACE_INBOUND) {
+    trace.info({ connectionId, jid, kinds, textLen: text.length }, "inbound accepted");
+  }
 
   const ts = m.messageTimestamp;
   const timestamp = typeof ts === "number" ? ts : (ts?.toNumber?.() ?? 0);
@@ -278,6 +310,7 @@ function normalizeInbound(
   return {
     connectionId,
     from: jid.split("@")[0] ?? jid,
+    fromJid: jid,
     text,
     externalId: m.key.id ?? `${jid}-${timestamp}`,
     timestamp,

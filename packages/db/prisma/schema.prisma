@@ -126,6 +126,12 @@ model Contact {
   id             String   @id @default(cuid())
   organizationId String
   phone          String
+  /**
+   * Full WhatsApp JID this contact messages us from. For LID ("hidden number")
+   * senders `phone` holds an opaque id rather than a real number, so this is the
+   * only routable address we have — outbound must prefer it.
+   */
+  waJid          String?
   name           String?
   fields         Json     @default("{}")
   tags           String[] @default([])

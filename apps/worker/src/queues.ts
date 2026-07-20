@@ -17,6 +17,8 @@ export interface InboundJob {
   organizationId: string;
   connectionId: string;
   from: string;
+  /** Full sender JID (`…@s.whatsapp.net` / `…@lid`); optional on legacy jobs. */
+  fromJid?: string;
   text: string;
   externalId: string;
 }
@@ -26,6 +28,8 @@ export interface OutboundJob {
   organizationId: string;
   connectionId: string;
   to: string;
+  /** Full destination JID; when absent the provider derives one from `to`. */
+  toJid?: string;
   text: string;
 }
 

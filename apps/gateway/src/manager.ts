@@ -87,12 +87,13 @@ export class SessionManager {
     this.liveState.delete(connectionId);
   }
 
-  async send(connectionId: string, to: string, text: string): Promise<void> {
+  async send(connectionId: string, to: string, text: string, toJid?: string): Promise<void> {
     if (await this.isCloud(connectionId)) {
+      // Cloud API addresses by phone number; JIDs are a Baileys concept.
       await this.cloud.send({ connectionId, to, text });
       return;
     }
-    await this.provider.send({ connectionId, to, text });
+    await this.provider.send({ connectionId, to, toJid, text });
   }
 
   private async isCloud(connectionId: string): Promise<boolean> {
@@ -138,6 +139,7 @@ export class SessionManager {
         organizationId,
         connectionId: msg.connectionId,
         from: msg.from,
+        fromJid: msg.fromJid,
         text: msg.text,
         externalId: msg.externalId,
       },
