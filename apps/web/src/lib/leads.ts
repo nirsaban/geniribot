@@ -91,6 +91,26 @@ export interface LeadFilters {
   tag?: string;
   from?: string;
   to?: string;
+  /** "1" = only leads going cold (see STALE_DAYS). */
+  stale?: string;
+}
+
+/**
+ * How long a lead may sit without contact before it counts as going cold.
+ * Deliberately short: these are WhatsApp leads who just raised their hand, and
+ * a week of silence is already a lost sale.
+ */
+export const STALE_DAYS = 7;
+
+/** Leads still in play that nobody has touched recently. */
+export function staleWhere(): Prisma.ContactWhereInput {
+  const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
+  return {
+    status: { notIn: ["WON", "LOST"] },
+    // A lead the bot never reached is stale from creation, so a null
+    // lastContactedAt counts too rather than being silently excluded.
+    OR: [{ lastContactedAt: { lt: cutoff } }, { lastContactedAt: null, createdAt: { lt: cutoff } }],
+  };
 }
 
 /** Sort options exposed in the list header. */
@@ -162,6 +182,8 @@ export function buildLeadWhere(
       ],
     });
   }
+  // Also an OR, so it joins the AND list rather than overwriting the others.
+  if (f.stale === "1") and.push(staleWhere());
   if (and.length > 0) where.AND = and;
 
   if (f.status && LEAD_STATUSES.includes(f.status as LeadStatus)) {

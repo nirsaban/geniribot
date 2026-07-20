@@ -93,7 +93,14 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   };
 
   const hasFilters = Boolean(
-    params.q || params.status || params.owner || params.flow || params.tag || params.from || params.to,
+    params.q ||
+      params.status ||
+      params.owner ||
+      params.flow ||
+      params.tag ||
+      params.from ||
+      params.to ||
+      params.stale,
   );
 
   return (
@@ -198,7 +205,17 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             <input id="to" type="date" name="to" defaultValue={params.to ?? ""} className="input" />
           </div>
 
-          <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+          <div className="flex flex-wrap items-end gap-3 sm:col-span-2 lg:col-span-4">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                name="stale"
+                value="1"
+                defaultChecked={params.stale === "1"}
+                className="h-4 w-4 rounded border-line accent-brand"
+              />
+              {he.filterStale}
+            </label>
             <select name="sort" defaultValue={sort} aria-label={he.sortLabel} className="input max-w-[11rem]">
               <option value="new">{he.sortNewest}</option>
               <option value="old">{he.sortOldest}</option>

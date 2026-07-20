@@ -409,6 +409,22 @@ export const he = {
   callSummaryEmpty: "עדיין לא נרשם סיכום שיחה.",
   callSummaryBy: "נרשם על ידי",
 
+  // analytics
+  funnelTitle: "משפך המכירות",
+  funnelHint: "כמה לידים בכל שלב",
+  byScenarioTitle: "ביצועים לפי תסריט",
+  byAgentTitle: "עומס לפי נציג",
+  colLeads: "לידים",
+  colWon: "נסגרו",
+  colWinRate: "אחוז סגירה",
+  colOpen: "פתוחים",
+  staleTitle: "לידים שמתקררים",
+  staleHint: "לידים פתוחים שלא נגעו בהם יותר משבוע",
+  staleView: "הצג לידים מתקררים ←",
+  staleNone: "אין לידים מוזנחים — כל הכבוד! 🎉",
+  filterStale: "רק לידים מתקררים",
+  analyticsNoData: "אין מספיק נתונים עדיין.",
+
   // flow builder — team steps
   stepAssignLabel: "שיוך לנציג",
   stepAssignDesc: "משייך את הליד לאיש מכירות אוטומטית",
