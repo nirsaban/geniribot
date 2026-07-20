@@ -41,3 +41,5 @@ export function forOrg(organizationId: string) {
 }
 
 export type TenantContext = ReturnType<typeof forOrg>;
+
+export { logActivity } from "./activity.js";

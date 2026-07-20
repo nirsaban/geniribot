@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { FlowDefinition } from "@kesher/flow-engine";
+import { deriveFieldSchema, FlowDefinition } from "@kesher/flow-engine";
 import { prisma, type Prisma } from "@kesher/db";
 import { getSession } from "@/lib/session";
 
@@ -50,6 +50,9 @@ export async function saveFlowAction(
     where: { id: flow.id },
     data: {
       definition: raw as Prisma.InputJsonValue,
+      // Re-derived on every save so the CRM's columns can never drift from the
+      // questions the bot actually asks.
+      fieldSchema: deriveFieldSchema(parsed.data) as unknown as Prisma.InputJsonValue,
       version: { increment: 1 },
       ...(activeElsewhere === 0 ? { isActive: true } : {}),
     },
@@ -106,6 +109,9 @@ export async function createFlowAction(formData: FormData): Promise<void> {
       name: tpl.name,
       isActive: false,
       definition: tpl.definition as Prisma.InputJsonValue,
+      fieldSchema: deriveFieldSchema(
+        FlowDefinition.parse(tpl.definition),
+      ) as unknown as Prisma.InputJsonValue,
     },
   });
   redirect(`/dashboard/flows/${flow.id}/edit`);

@@ -28,6 +28,9 @@ model Organization {
   availability  AvailabilityRule[]
   calendarLinks CalendarIntegration[]
   secrets       Secret[]
+  invites       Invite[]
+  leadNotes     LeadNote[]
+  activities    LeadActivity[]
   onboardedAt   DateTime?
   calcomLink    String?
 }
@@ -59,7 +62,11 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownedContacts  Contact[]      @relation("ContactOwner")
+  leadNotes      LeadNote[]
+  leadActivities LeadActivity[]
+  sentInvites    Invite[]       @relation("InviteSender")
 
   @@index([organizationId])
 }
@@ -68,6 +75,28 @@ enum Role {
   OWNER
   ADMIN
   AGENT
+}
+
+/**
+ * A pending teammate invitation. The raw token is shown to the inviter exactly
+ * once and never stored — only its SHA-256 hash — so a database leak cannot be
+ * replayed into account creation.
+ */
+model Invite {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String?
+  role           Role      @default(AGENT)
+  tokenHash      String    @unique
+  invitedById    String?
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("InviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
 }
 
 enum Plan {
@@ -113,6 +142,16 @@ model Flow {
   version        Int      @default(1)
   isActive       Boolean  @default(false)
   definition     Json
+  /**
+   * The canonical set of fields this scenario collects, derived from
+   * `definition` on every save: [{ key, label, expect, choices?, order }].
+   *
+   * Without this the field set is emergent — just whatever `field` strings the
+   * builder happened to type — so the CRM cannot know a column exists until
+   * some lead has filled it, cannot label it, and cannot tell a date from a
+   * number. Persisting it makes the fields a fixed contract for the campaign.
+   */
+  fieldSchema    Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -133,20 +172,107 @@ model Contact {
    */
   waJid          String?
   name           String?
-  fields         Json     @default("{}")
-  tags           String[] @default([])
+  fields         Json       @default("{}")
+  tags           String[]   @default([])
+  /** Where this lead sits in the sales pipeline. Advanced by agents, not the bot. */
+  status         LeadStatus @default(NEW)
+  /** The agent responsible for this lead. Null = unassigned. */
   ownerUserId    String?
   /** Name of the flow/scenario that first engaged this lead (null = just an inbound msg). */
   source         String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  /**
+   * Stable reference to that scenario. `source` is a NAME and so breaks on
+   * rename; this is what the CRM resolves the field schema through.
+   */
+  sourceFlowId   String?
+  /**
+   * What the agent recorded after the sales call — written by a human in the
+   * dashboard, never generated. Separate from `notes` because every lead has at
+   * most one call outcome, and it is what the list view surfaces.
+   */
+  callSummary     String?
+  callSummaryAt   DateTime?
+  callSummaryById String?
+  /** Last inbound/outbound WhatsApp activity — drives "stale lead" surfacing. */
+  lastContactedAt DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner         User?          @relation("ContactOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   conversations Conversation[]
   appointments  Appointment[]
+  notes         LeadNote[]
+  activities    LeadActivity[]
 
   @@unique([organizationId, phone])
   @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([organizationId, ownerUserId])
+  @@index([organizationId, createdAt])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  MEETING_SET
+  WON
+  LOST
+}
+
+/** Free-text notes an agent adds to a lead over time. */
+model LeadNote {
+  id             String   @id @default(cuid())
+  organizationId String
+  contactId      String
+  userId         String?
+  body           String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  author       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([contactId, createdAt])
+}
+
+/**
+ * Append-only audit of everything that happened to a lead. This is what makes
+ * handing a lead between agents work: the next person can see who did what and
+ * when, rather than inferring it from the current field values.
+ */
+model LeadActivity {
+  id             String       @id @default(cuid())
+  organizationId String
+  contactId      String
+  /** Null = the system/bot acted, not a person. */
+  userId         String?
+  kind           ActivityKind
+  /** Previous → new value for transitions (status, owner). Free-form by kind. */
+  fromValue      String?
+  toValue        String?
+  meta           Json?
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([contactId, createdAt])
+}
+
+enum ActivityKind {
+  LEAD_CREATED
+  STATUS_CHANGED
+  OWNER_ASSIGNED
+  NOTE_ADDED
+  SUMMARY_SAVED
+  TAGS_CHANGED
+  APPOINTMENT_BOOKED
+  CONVERSATION_COMPLETED
 }
 
 // ---------- Conversations (flow-run state) ----------

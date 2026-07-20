@@ -1,5 +1,5 @@
 import { childLogger } from "@kesher/core";
-import { prisma, type Prisma } from "@kesher/db";
+import { logActivity, prisma, type Prisma } from "@kesher/db";
 import {
   FlowDefinition,
   matchesTrigger,
@@ -82,10 +82,16 @@ export async function processInbound(job: InboundJob): Promise<void> {
   }
 
   // Mark the lead's source = the scenario that first engaged them (distinguishes
-  // real scenario leads from plain inbound messages).
-  if (!contact.source) {
-    await prisma.contact.update({ where: { id: contact.id }, data: { source: flowRow.name } });
-  }
+  // real scenario leads from plain inbound messages). `sourceFlowId` is the
+  // stable half — `source` is a name and would break on rename, but the CRM
+  // resolves the field schema through the id.
+  await prisma.contact.update({
+    where: { id: contact.id },
+    data: {
+      ...(contact.source ? {} : { source: flowRow.name, sourceFlowId: flowRow.id }),
+      lastContactedAt: new Date(),
+    },
+  });
 
   await prisma.message.create({
     data: { conversationId: convo.id, direction: "IN", body: text },
@@ -128,7 +134,14 @@ async function resolveContact(organizationId: string, phone: string, waJid?: str
     return existing;
   }
   try {
-    return await prisma.contact.create({ data: { organizationId, phone, waJid } });
+    const created = await prisma.contact.create({ data: { organizationId, phone, waJid } });
+    await logActivity({
+      organizationId,
+      contactId: created.id,
+      kind: "LEAD_CREATED",
+      meta: { phone },
+    });
+    return created;
   } catch (err) {
     // Another message for the same new contact won the create race.
     if ((err as { code?: string }).code === "P2002") {
@@ -281,6 +294,13 @@ async function handleBookingReply(
     },
   });
   await sendOut(`מצוין! נקבעה שיחה ל־${formatSlot(new Date(slot.start))} ✅`, ctx);
+  await logActivity({
+    organizationId: ctx.organizationId,
+    contactId: ctx.contactId,
+    kind: "APPOINTMENT_BOOKED",
+    toValue: appt.startsAt.toISOString(),
+    meta: { appointmentId: appt.id },
+  });
 
   // Google Calendar event + WhatsApp reminders (both optional / best-effort).
   await syncCalendarEvent(appt.id, ctx);
@@ -326,15 +346,28 @@ async function persist(
     });
   }
 
+  const status = awaitingInput ? "ACTIVE" : state.status === "handoff" ? "HANDOFF" : "COMPLETED";
   await prisma.conversation.update({
     where: { id: ctx.conversationId },
     data: {
       state: state as unknown as Prisma.InputJsonValue,
       currentNodeId: state.currentNodeId,
-      status: awaitingInput ? "ACTIVE" : state.status === "handoff" ? "HANDOFF" : "COMPLETED",
+      status,
       lastMessageAt: new Date(),
     },
   });
+
+  // The bot finishing its questions is the moment a human should pick the lead
+  // up, so it belongs on the timeline.
+  if (status !== "ACTIVE") {
+    await logActivity({
+      organizationId: ctx.organizationId,
+      contactId: ctx.contactId,
+      kind: "CONVERSATION_COMPLETED",
+      toValue: status,
+      meta: { conversationId: ctx.conversationId },
+    });
+  }
 }
 
 function normalizeState(s: Partial<FlowState>): FlowState {
