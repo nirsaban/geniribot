@@ -47,7 +47,11 @@ export async function processInbound(job: InboundJob): Promise<void> {
   const keywordFlow = await selectKeywordFlow(organizationId, text);
   let flowRow: Flow | null = null;
 
-  if (keywordFlow && (!convo || convo.flowId !== keywordFlow.id)) {
+  // A keyword restarts its flow even when that same flow is the one already
+  // running. The previous `convo.flowId !== keywordFlow.id` guard meant sending
+  // the keyword again did nothing — the most obvious thing a lead (or the
+  // business testing their own bot) tries, and it answered with silence.
+  if (keywordFlow) {
     if (convo) {
       await prisma.conversation.update({ where: { id: convo.id }, data: { status: "ABANDONED" } });
       convo = null;
@@ -118,8 +122,18 @@ export async function processInbound(job: InboundJob): Promise<void> {
   }
 
   // Branch 2: normal engine run.
-  const isFresh = !prevState || prevState.currentNodeId === undefined;
-  const result = isFresh ? start(flow) : step(flow, normalizeState(prevState), { text });
+  //
+  // A conversation that already reached the end stores `currentNodeId: null`,
+  // and the engine answers any further message on it with zero actions. Testing
+  // only for `undefined` therefore treated a finished conversation as
+  // resumable, so every lead who completed a flow and wrote again got silence
+  // — permanently, since nothing ever moved the state on. Restart instead.
+  const finished =
+    !prevState ||
+    prevState.currentNodeId === undefined ||
+    prevState.currentNodeId === null ||
+    prevState.status === "completed";
+  const result = finished ? start(flow) : step(flow, normalizeState(prevState), { text });
   await applyAndPersist(flow, result, ctx);
 }
 
@@ -375,7 +389,18 @@ async function persist(
     });
   }
 
-  const status = awaitingInput ? "ACTIVE" : state.status === "handoff" ? "HANDOFF" : "COMPLETED";
+  // The engine's own view of the run wins over `awaitingInput`. A finished run
+  // that still reported awaitingInput left the row ACTIVE while its state said
+  // "completed" — which is how a dead conversation kept being picked up as the
+  // live one instead of a fresh conversation being started.
+  const status =
+    state.status === "handoff"
+      ? "HANDOFF"
+      : state.status === "completed" || state.currentNodeId === null
+        ? "COMPLETED"
+        : awaitingInput
+          ? "ACTIVE"
+          : "COMPLETED";
   await prisma.conversation.update({
     where: { id: ctx.conversationId },
     data: {
