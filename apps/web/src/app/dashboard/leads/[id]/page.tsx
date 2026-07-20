@@ -1,16 +1,24 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { hasRole, type Role } from "@kesher/core";
 import { prisma, type ActivityKind } from "@kesher/db";
 import { Badge, Card } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
-import { formatFieldValue, LEAD_STATUSES, schemaOf, statusTone } from "@/lib/leads";
+import {
+  formatFieldValue,
+  LEAD_STATUSES,
+  leadVisibility,
+  schemaOf,
+  statusTone,
+} from "@/lib/leads";
 import {
   addNoteAction,
   assignOwnerAction,
   deleteNoteAction,
   saveSummaryAction,
   setStatusAction,
+  setTagAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -35,8 +43,11 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   if (!session) redirect("/login");
   const { id } = await params;
 
+  // Row visibility applies here too: hiding a lead from the list without
+  // enforcing it on the detail page would leave it readable by direct URL.
+  const visibility = leadVisibility({ userId: session.sub, role: session.role as Role });
   const contact = await prisma.contact.findFirst({
-    where: { id, organizationId: session.org },
+    where: { id, organizationId: session.org, ...(visibility ?? {}) },
     include: {
       owner: { select: { id: true, name: true, email: true } },
       appointments: { orderBy: { startsAt: "asc" } },
@@ -144,7 +155,11 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                 className="input"
               >
                 <option value="">{he.unassigned}</option>
-                {members.map((m) => (
+                {/* Agents may claim or release, not reassign to a colleague. */}
+                {(hasRole(session.role as Role, "ADMIN")
+                  ? members
+                  : members.filter((m) => m.id === session.sub)
+                ).map((m) => (
                   <option key={m.id} value={m.id}>
                     {memberName(m)}
                   </option>
@@ -218,15 +233,41 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               ))}
             </dl>
           )}
-          {contact.tags.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-1">
-              {contact.tags.map((t) => (
-                <span key={t} className="badge-gray">
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="mt-5 border-t border-line/60 pt-4">
+            <h3 className="mb-2 text-sm font-semibold text-ink">{he.tagsTitle}</h3>
+            {contact.tags.length === 0 ? (
+              <p className="text-sm text-slate-400">{he.noTags}</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {contact.tags.map((t) => (
+                  <form key={t} action={setTagAction} className="inline-flex">
+                    <input type="hidden" name="id" value={contact.id} />
+                    <input type="hidden" name="tag" value={t} />
+                    <input type="hidden" name="op" value="remove" />
+                    <button
+                      type="submit"
+                      title={he.removeTag}
+                      className="badge-gray hover:bg-red-50 hover:text-red-600"
+                    >
+                      {t} <span aria-hidden="true">✕</span>
+                    </button>
+                  </form>
+                ))}
+              </div>
+            )}
+            <form action={setTagAction} className="mt-3 flex flex-wrap gap-2">
+              <input type="hidden" name="id" value={contact.id} />
+              <input
+                name="tag"
+                required
+                placeholder={he.tagPlaceholder}
+                className="input min-w-0 flex-1"
+              />
+              <button className="btn-secondary btn-sm" type="submit">
+                {he.addTag}
+              </button>
+            </form>
+          </div>
         </Card>
 
         {/* Appointments */}

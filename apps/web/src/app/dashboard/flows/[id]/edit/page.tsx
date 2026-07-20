@@ -12,9 +12,15 @@ export default async function EditFlowPage({ params }: { params: Promise<{ id: s
   if (!session) redirect("/login");
   const { id } = await params;
 
-  const flow = await prisma.flow.findFirst({
-    where: { id, organizationId: session.org },
-  });
+  const [flow, members] = await Promise.all([
+    prisma.flow.findFirst({ where: { id, organizationId: session.org } }),
+    // For the "assign to" step: the people a lead can be routed to.
+    prisma.user.findMany({
+      where: { organizationId: session.org },
+      select: { id: true, name: true, email: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
   if (!flow) notFound();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,7 +34,7 @@ export default async function EditFlowPage({ params }: { params: Promise<{ id: s
       <h1 className="mb-5 mt-2 text-2xl font-bold text-ink">
         {flow.name} <span className="text-sm font-normal text-slate-400">v{flow.version}</span>
       </h1>
-      <SequenceEditor flowId={flow.id} initial={def} isActive={flow.isActive} />
+      <SequenceEditor flowId={flow.id} initial={def} isActive={flow.isActive} members={members} />
     </>
   );
 }

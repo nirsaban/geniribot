@@ -1,5 +1,6 @@
 import { deriveFieldSchema, parseFieldSchema, type FieldSpec } from "@kesher/flow-engine";
 import { FlowDefinition } from "@kesher/flow-engine";
+import { hasRole, type Role } from "@kesher/core";
 import type { LeadStatus, Prisma } from "@kesher/db";
 import { prisma } from "@kesher/db";
 
@@ -106,24 +107,63 @@ export function isLeadSort(v: string | undefined): v is LeadSort {
   return !!v && v in LEAD_SORTS;
 }
 
+/** Who is looking — determines which leads are visible at all. */
+export interface LeadViewer {
+  userId: string;
+  role: Role;
+}
+
+/**
+ * Row-level visibility.
+ *
+ * An AGENT sees the leads assigned to them plus the unassigned pool, so new
+ * leads stay claimable by whoever gets to them first; ADMIN and OWNER see
+ * everything. Returns null when there is no restriction.
+ *
+ * This is a `where` fragment rather than a UI concern on purpose — it has to
+ * apply identically to the list, the CSV export, the detail page and every
+ * mutation, and the only way to guarantee that is to make it part of the query.
+ */
+export function leadVisibility(viewer: LeadViewer | undefined): Prisma.ContactWhereInput | null {
+  if (!viewer || hasRole(viewer.role, "ADMIN")) return null;
+  return { OR: [{ ownerUserId: viewer.userId }, { ownerUserId: null }] };
+}
+
 /**
  * Translate URL filters into a Prisma `where`.
  *
  * Shared by the list page and the CSV export so "export" always means "exactly
  * the rows you are looking at" — if these drifted apart the export would
  * silently include leads the user had filtered out.
+ *
+ * Both the search terms and the visibility rule need an OR, so they are
+ * combined under AND: assigning `where.OR` twice would silently drop whichever
+ * came first, and if visibility lost that race an agent would see every lead
+ * the moment they typed in the search box.
  */
-export function buildLeadWhere(organizationId: string, f: LeadFilters): Prisma.ContactWhereInput {
+export function buildLeadWhere(
+  organizationId: string,
+  f: LeadFilters,
+  viewer?: LeadViewer,
+): Prisma.ContactWhereInput {
   const where: Prisma.ContactWhereInput = { organizationId };
+  const and: Prisma.ContactWhereInput[] = [];
+
+  const visibility = leadVisibility(viewer);
+  if (visibility) and.push(visibility);
 
   const term = f.q?.trim();
   if (term) {
-    where.OR = [
-      { name: { contains: term, mode: "insensitive" } },
-      { phone: { contains: term } },
-      { callSummary: { contains: term, mode: "insensitive" } },
-    ];
+    and.push({
+      OR: [
+        { name: { contains: term, mode: "insensitive" } },
+        { phone: { contains: term } },
+        { callSummary: { contains: term, mode: "insensitive" } },
+      ],
+    });
   }
+  if (and.length > 0) where.AND = and;
+
   if (f.status && LEAD_STATUSES.includes(f.status as LeadStatus)) {
     where.status = f.status as LeadStatus;
   }

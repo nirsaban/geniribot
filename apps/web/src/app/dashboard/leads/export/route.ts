@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { type Role } from "@kesher/core";
 import { prisma } from "@kesher/db";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
@@ -30,7 +31,12 @@ export async function GET(req: Request): Promise<Response> {
 
   const url = new URL(req.url);
   const params = Object.fromEntries(url.searchParams) as LeadFilters & { sort?: string };
-  const where = buildLeadWhere(session.org, params);
+  // Scoped to the caller: an agent's export must not become a way to read the
+  // whole organization's lead list.
+  const where = buildLeadWhere(session.org, params, {
+    userId: session.sub,
+    role: session.role as Role,
+  });
   const sort = isLeadSort(params.sort) ? params.sort : "new";
 
   const [contacts, scenarios] = await Promise.all([

@@ -140,6 +140,33 @@ export async function changeRoleAction(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/team");
 }
 
+/**
+ * Set where a member is pinged when the bot hands them a lead.
+ *
+ * Digits only: it is fed to the WhatsApp gateway, which builds a JID from it.
+ * Blank clears it, falling the member back to email notifications.
+ */
+export async function setNotifyPhoneAction(formData: FormData): Promise<void> {
+  const session = await requireSession();
+  const userId = String(formData.get("userId") ?? "");
+  const raw = String(formData.get("notifyPhone") ?? "").replace(/\D/g, "");
+
+  // A member may always set their own; changing someone else's is ADMIN+.
+  if (userId !== session.sub && !hasRole(session.role as Role, "ADMIN")) return;
+
+  const member = await prisma.user.findFirst({
+    where: { id: userId, organizationId: session.org },
+    select: { id: true },
+  });
+  if (!member) return;
+
+  await prisma.user.update({
+    where: { id: member.id },
+    data: { notifyPhone: raw || null },
+  });
+  revalidatePath("/dashboard/team");
+}
+
 export async function removeMemberAction(formData: FormData): Promise<void> {
   const session = await requireAdmin();
   const userId = String(formData.get("userId") ?? "");

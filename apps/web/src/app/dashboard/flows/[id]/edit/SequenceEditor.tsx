@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { he } from "@/lib/he";
 import { saveFlowAction } from "../../actions";
 
-type StepKind = "message" | "question" | "book";
+type StepKind = "message" | "question" | "book" | "assign" | "notify" | "tag";
 interface Step {
   id: string;
   kind: StepKind;
@@ -14,7 +14,20 @@ interface Step {
   field?: string;
   expect?: string;
   choices?: string[];
+  /** assign: target user id, or "" for automatic least-loaded routing. */
+  assignTo?: string;
+  /** tag: the tag to add. */
+  tag?: string;
 }
+
+export interface Member {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+/** Steps the lead never sees — they act on the CRM, not the conversation. */
+const SILENT_KINDS: StepKind[] = ["assign", "notify", "tag"];
 interface Trigger {
   type: "any" | "keyword";
   keywords?: string[];
@@ -37,6 +50,18 @@ const KIND: Record<StepKind, { icon: string; label: string; color: string }> = {
   message: { icon: "💬", label: he.stepMessageLabel, color: "#0d9488" },
   question: { icon: "❓", label: he.stepQuestionLabel, color: "#2563eb" },
   book: { icon: "📅", label: he.stepBookLabel, color: "#d97706" },
+  assign: { icon: "🧑‍💼", label: he.stepAssignLabel, color: "#7c3aed" },
+  notify: { icon: "🔔", label: he.stepNotifyLabel, color: "#db2777" },
+  tag: { icon: "🔖", label: he.stepTagLabel, color: "#0891b2" },
+};
+
+const KIND_DESC: Record<StepKind, string> = {
+  message: he.stepMessageDesc,
+  question: he.stepQuestionDesc,
+  book: he.stepBookDesc,
+  assign: he.stepAssignDesc,
+  notify: he.stepNotifyDesc,
+  tag: he.stepTagDesc,
 };
 
 let counter = 0;
@@ -54,7 +79,15 @@ function defToSteps(def: Def): Step[] {
     if (n.type === "message") steps.push({ id: cur, kind: "message", text: n.text as string });
     else if (n.type === "question")
       steps.push({ id: cur, kind: "question", prompt: n.prompt as string, field: n.field as string, expect: (n.expect as string) ?? "text", choices: n.choices as string[] });
-    else if (n.type === "action" && n.action === "book_appointment") steps.push({ id: cur, kind: "book" });
+    else if (n.type === "action") {
+      const params = (n.params ?? {}) as Record<string, unknown>;
+      if (n.action === "book_appointment") steps.push({ id: cur, kind: "book" });
+      else if (n.action === "assign_owner")
+        steps.push({ id: cur, kind: "assign", assignTo: (params.userId as string) ?? "" });
+      else if (n.action === "notify_agent") steps.push({ id: cur, kind: "notify" });
+      else if (n.action === "add_tag")
+        steps.push({ id: cur, kind: "tag", tag: (n.tag as string) ?? (params.tag as string) ?? "" });
+    }
     cur = n.type === "condition" ? ((n.then as string) ?? (n.else as string)) : (n.next as string);
   }
   return steps;
@@ -75,6 +108,17 @@ function stepsToDef(steps: Step[], trigger: Trigger): Def {
         ...(s.choices?.length ? { choices: s.choices } : {}),
         next,
       };
+    else if (s.kind === "assign")
+      nodes[s.id] = {
+        type: "action",
+        action: "assign_owner",
+        // No userId means automatic routing to the least-loaded member.
+        ...(s.assignTo ? { params: { userId: s.assignTo } } : {}),
+        next,
+      };
+    else if (s.kind === "notify") nodes[s.id] = { type: "action", action: "notify_agent", next };
+    else if (s.kind === "tag")
+      nodes[s.id] = { type: "action", action: "add_tag", params: { tag: s.tag ?? "" }, next };
     else nodes[s.id] = { type: "action", action: "book_appointment", next };
   });
   return { start: steps[0]?.id ?? "n1", nodes, trigger };
@@ -84,10 +128,12 @@ export function SequenceEditor({
   flowId,
   initial,
   isActive: initialActive,
+  members = [],
 }: {
   flowId: string;
   initial: Def;
   isActive: boolean;
+  members?: Member[];
 }) {
   const router = useRouter();
   const [steps, setSteps] = useState<Step[]>(() => defToSteps(initial));
@@ -112,7 +158,11 @@ export function SequenceEditor({
         ? { id: newId(), kind, text: "" }
         : kind === "question"
           ? { id: newId(), kind, prompt: "", field: "", expect: "text" }
-          : { id: newId(), kind };
+          : kind === "assign"
+            ? { id: newId(), kind, assignTo: "" }
+            : kind === "tag"
+              ? { id: newId(), kind, tag: "" }
+              : { id: newId(), kind };
     setSteps((s) => {
       if (at === undefined) return [...s, base];
       const copy = [...s];
@@ -222,6 +272,38 @@ export function SequenceEditor({
                   </>
                 )}
                 {s.kind === "book" && <p className="text-sm text-slate-500">{he.bookNote}</p>}
+                {s.kind === "assign" && (
+                  <>
+                    <div>
+                      <div className="label">{he.assignToLabel}</div>
+                      <select
+                        value={s.assignTo ?? ""}
+                        onChange={(e) => patch(s.id, { assignTo: e.target.value })}
+                        className="input"
+                      >
+                        <option value="">{he.assignAuto}</option>
+                        {members.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name || m.email}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-xs text-slate-400">{he.assignNote}</p>
+                  </>
+                )}
+                {s.kind === "notify" && <p className="text-sm text-slate-500">{he.notifyNote}</p>}
+                {s.kind === "tag" && (
+                  <div>
+                    <div className="label">{he.tagToAdd}</div>
+                    <input
+                      value={s.tag ?? ""}
+                      onChange={(e) => patch(s.id, { tag: e.target.value })}
+                      placeholder={he.tagPlaceholder}
+                      className="input"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -256,12 +338,10 @@ function AddBar({ onAdd }: { onAdd: (k: StepKind) => void }) {
         </button>
       ) : (
         <div className="z-10 flex flex-wrap justify-center gap-2 rounded-xl border border-line bg-white p-2 shadow-card">
-          {(["message", "question", "book"] as StepKind[]).map((k) => (
+          {(["message", "question", "book", "assign", "notify", "tag"] as StepKind[]).map((k) => (
             <button key={k} onClick={() => { onAdd(k); setOpen(false); }} className="w-40 rounded-lg border border-line p-2 text-right text-xs hover:bg-slate-50">
               <div className="font-semibold text-ink">{KIND[k].icon} {KIND[k].label}</div>
-              <div className="mt-0.5 text-[10px] leading-tight text-slate-400">
-                {k === "message" ? he.stepMessageDesc : k === "question" ? he.stepQuestionDesc : he.stepBookDesc}
-              </div>
+              <div className="mt-0.5 text-[10px] leading-tight text-slate-400">{KIND_DESC[k]}</div>
             </button>
           ))}
           <button onClick={() => setOpen(false)} className="self-center text-xs text-slate-400">✕</button>
@@ -298,6 +378,15 @@ function Preview({ steps }: { steps: Step[] }) {
               <Bubble side="bot">
                 בחר/י מועד לשיחה:{"\n"}1. יום ראשון 09:00{"\n"}2. יום ראשון 09:30 …
               </Bubble>
+            )}
+            {/* Internal steps produce no message — say so, rather than leaving a
+                silent gap the builder reads as "nothing happens here". */}
+            {SILENT_KINDS.includes(s.kind) && (
+              <div className="flex justify-center">
+                <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] text-slate-500">
+                  {KIND[s.kind].icon} {he.previewSilentStep}
+                </span>
+              </div>
             )}
           </div>
         ))}

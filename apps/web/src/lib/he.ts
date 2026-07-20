@@ -409,6 +409,32 @@ export const he = {
   callSummaryEmpty: "עדיין לא נרשם סיכום שיחה.",
   callSummaryBy: "נרשם על ידי",
 
+  // flow builder — team steps
+  stepAssignLabel: "שיוך לנציג",
+  stepAssignDesc: "משייך את הליד לאיש מכירות אוטומטית",
+  stepNotifyLabel: "התראה לנציג",
+  stepNotifyDesc: "שולח לנציג התראה על הליד החדש",
+  stepTagLabel: "הוספת תגית",
+  stepTagDesc: "מסמן את הליד בתגית לסינון מהיר",
+  assignToLabel: "שייך אל",
+  assignAuto: "אוטומטי — הנציג הפנוי ביותר",
+  assignNote: "אם הליד כבר משויך, השלב לא ישנה את השיוך.",
+  notifyNote: "ההתראה נשלחת בוואטסאפ לנציג (אם הוגדר לו טלפון להתראות), אחרת במייל.",
+  tagToAdd: "התגית להוספה",
+  previewSilentStep: "שלב פנימי — הלקוח לא רואה כלום",
+
+  // tags
+  tagsTitle: "תגיות",
+  addTag: "הוסף תגית",
+  tagPlaceholder: "לדוגמה: דחוף, VIP…",
+  removeTag: "הסר תגית",
+  noTags: "אין תגיות.",
+
+  // agent notification
+  notifyPhone: "טלפון להתראות",
+  notifyPhoneHint: "מספר וואטסאפ לקבלת התראות על לידים חדשים. ריק = התראה במייל.",
+  save: "שמור",
+
   // notes
   notesTitle: "הערות",
   addNote: "הוסף הערה",

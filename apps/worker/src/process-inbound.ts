@@ -11,6 +11,7 @@ import {
   type StepResult,
 } from "@kesher/flow-engine";
 import type { Flow } from "@kesher/db";
+import { addTag, assignOwner, notifyAgent } from "./agent-routing.js";
 import { orgCalendar } from "./calendar.js";
 import { formatSlot, offerSlots, slotMenu } from "./booking.js";
 import {
@@ -103,6 +104,7 @@ export async function processInbound(job: InboundJob): Promise<void> {
     to: from,
     toJid: fromJid ?? contact.waJid ?? undefined,
     contactId: contact.id,
+    ownerUserId: contact.ownerUserId,
     conversationId: convo.id,
     contactFields: (contact.fields as Record<string, unknown>) ?? {},
     contactName: contact.name,
@@ -213,6 +215,10 @@ interface Ctx {
   /** Routable sender JID; see InboundMessage.fromJid. */
   toJid?: string;
   contactId: string;
+  /** Owner at the time the run started. */
+  ownerUserId?: string | null;
+  /** Set when `assign_owner` ran earlier in this same step. */
+  assignedUserId?: string;
   conversationId: string;
   contactFields: Record<string, unknown>;
   contactName: string | null;
@@ -258,6 +264,29 @@ async function applyAndPersist(flow: FlowDefinition, result: StepResult, ctx: Ct
         for (const a of resumed.actions) if (a.kind === "send_message") await sendOut(a.text, ctx);
         finalState = resumed.state;
       }
+    } else if (action.kind === "add_tag") {
+      await addTag(ctx.organizationId, ctx.contactId, action.tag);
+    } else if (action.kind === "assign_owner") {
+      const userId = await assignOwner(ctx.organizationId, ctx.contactId, action.params);
+      // Remember it so a notify_agent later in the same run reaches the person
+      // who was just given the lead, without re-reading the row.
+      if (userId) ctx.assignedUserId = userId;
+    } else if (action.kind === "notify_agent") {
+      await notifyAgent({
+        organizationId: ctx.organizationId,
+        contactId: ctx.contactId,
+        connectionId: ctx.connectionId,
+        userId: ctx.assignedUserId ?? ctx.ownerUserId ?? null,
+        pendingFields: savedFields,
+        enqueueOutbound: async (to, text) => {
+          await outboundQueue.add(OUTBOUND_JOB, {
+            organizationId: ctx.organizationId,
+            connectionId: ctx.connectionId,
+            to,
+            text,
+          });
+        },
+      });
     } else {
       log.info({ kind: action.kind, conversationId: ctx.conversationId }, "action (later phase)");
     }

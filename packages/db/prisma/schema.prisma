@@ -58,6 +58,11 @@ model User {
   passwordHash   String
   name           String?
   role           Role     @default(AGENT)
+  /**
+   * Where to reach this agent on WhatsApp when the bot hands them a lead.
+   * Optional — without it `notify_agent` falls back to email.
+   */
+  notifyPhone    String?
   isSuperAdmin   Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

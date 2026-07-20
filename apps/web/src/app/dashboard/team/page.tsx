@@ -4,7 +4,12 @@ import { prisma } from "@kesher/db";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
-import { changeRoleAction, removeMemberAction, revokeInviteAction } from "./actions";
+import {
+  changeRoleAction,
+  removeMemberAction,
+  revokeInviteAction,
+  setNotifyPhoneAction,
+} from "./actions";
 import { InviteForm } from "./InviteForm";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +30,14 @@ export default async function TeamPage() {
     prisma.user.findMany({
       where: { organizationId: session.org },
       orderBy: [{ role: "asc" }, { createdAt: "asc" }],
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        notifyPhone: true,
+      },
     }),
     prisma.invite.findMany({
       where: { organizationId: session.org, acceptedAt: null },
@@ -74,6 +86,28 @@ export default async function TeamPage() {
                   <div className="mt-1 text-xs text-slate-400">
                     {he.leadsTitle}: {leadsByUser.get(m.id) ?? 0} · {fmtDate(m.createdAt)}
                   </div>
+
+                  <form action={setNotifyPhoneAction} className="mt-2 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="userId" value={m.id} />
+                    <div className="min-w-0 flex-1">
+                      <label className="label" htmlFor={`np-${m.id}`}>
+                        {he.notifyPhone}
+                      </label>
+                      <input
+                        id={`np-${m.id}`}
+                        name="notifyPhone"
+                        dir="ltr"
+                        inputMode="tel"
+                        defaultValue={m.notifyPhone ?? ""}
+                        placeholder="972501234567"
+                        className="input"
+                      />
+                    </div>
+                    <button className="btn-secondary btn-sm" type="submit">
+                      {he.save}
+                    </button>
+                  </form>
+                  <p className="mt-1 text-xs text-slate-400">{he.notifyPhoneHint}</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">

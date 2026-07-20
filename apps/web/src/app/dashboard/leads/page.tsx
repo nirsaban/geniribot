@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { hasRole, type Role } from "@kesher/core";
 import { prisma } from "@kesher/db";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
@@ -42,7 +43,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   if (!session) redirect("/login");
   const params = await searchParams;
 
-  const where = buildLeadWhere(session.org, params);
+  const viewer = { userId: session.sub, role: session.role as Role };
+  const where = buildLeadWhere(session.org, params, viewer);
+  const isAgent = !hasRole(viewer.role, "ADMIN");
   const sort = isLeadSort(params.sort) ? params.sort : "new";
   const page = Math.max(1, Number(params.page ?? 1) || 1);
 
@@ -61,8 +64,10 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       orderBy: { createdAt: "asc" },
     }),
     loadScenarioSchemas(session.org),
+    // Scoped the same way, so the tag filter never hints at leads the viewer
+    // cannot open.
     prisma.contact.findMany({
-      where: { organizationId: session.org },
+      where: buildLeadWhere(session.org, {}, viewer),
       select: { tags: true },
     }),
   ]);
@@ -231,9 +236,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               <button className="btn-secondary btn-sm" name="op" value="status" type="submit">
                 {he.bulkApply}
               </button>
+              {/* An agent may claim leads or release them, but not hand them to
+                  someone else — the action enforces this too. */}
               <select name="ownerValue" defaultValue="" className="input btn-sm max-w-[11rem]">
                 <option value="">{he.unassigned}</option>
-                {members.map((m) => (
+                {(isAgent ? members.filter((m) => m.id === session.sub) : members).map((m) => (
                   <option key={m.id} value={m.id}>
                     {memberName(m)}
                   </option>
