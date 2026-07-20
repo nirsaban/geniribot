@@ -22,7 +22,23 @@ start_svc() {
     echo "$name already running (pid $(cat "$pidfile"))"
     return
   fi
-  ( cd "$dir" && setsid nohup "$@" >>"$log" 2>&1 < /dev/null & echo $! >"$pidfile" )
+  # `$!` here would capture the setsid wrapper, not the service: setsid forks
+  # when its caller is already a process-group leader, so the recorded pid was
+  # consistently off by one and stop.sh silently killed nothing — leaving stale
+  # copies holding :4020/:4021 and the next start failing with EADDRINUSE.
+  # Instead the child records its OWN pid and then execs, so the pidfile always
+  # names the real process.
+  ( cd "$dir" && setsid bash -c 'echo $$ >"$0"; exec "$@"' "$pidfile" "$@" \
+      >>"$log" 2>&1 < /dev/null & )
+
+  for _ in $(seq 1 50); do
+    [ -s "$pidfile" ] && break
+    sleep 0.1
+  done
+  if [ ! -s "$pidfile" ]; then
+    echo "$name FAILED to start — see $log" >&2
+    return 1
+  fi
   echo "$name started (pid $(cat "$pidfile")) -> $log"
 }
 
