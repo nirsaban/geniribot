@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { evalCondition, resumeBooking, start, step } from "./step.js";
-import { FlowDefinition, matchesTrigger, triggerSpecificity } from "./types.js";
+import { evalCondition, MAX_RETRIES, resumeBooking, start, step } from "./step.js";
+import { FlowDefinition, initialState, matchesTrigger, triggerSpecificity, type FlowState } from "./types.js";
 
 const flow = FlowDefinition.parse({
   start: "n1",
@@ -109,5 +109,56 @@ describe("evalCondition", () => {
     expect(evalCondition("answers.budget > 1000", { budget: 5000 })).toBe(true);
     expect(evalCondition("answers.budget > 1000", { budget: 10 })).toBe(false);
     expect(evalCondition("answers.x != 'y'", { x: "z" })).toBe(true);
+  });
+});
+
+describe("retry cap", () => {
+  const choiceFlow = FlowDefinition.parse({
+    start: "q",
+    nodes: {
+      q: { type: "question", field: "ok", prompt: "כן או לא?", expect: "choice", choices: ["כן", "לא"], next: null },
+    },
+  });
+
+  it("re-prompts while under the cap", () => {
+    let state = initialState(choiceFlow);
+    state = { ...state, currentNodeId: "q" };
+    const r = step(choiceFlow, state, { text: "משהו אחר" });
+    expect(r.actions[0]).toMatchObject({ kind: "send_message" });
+    expect(r.state.retries).toBe(1);
+    expect(r.awaitingInput).toBe(true);
+  });
+
+  it("hands off instead of re-prompting forever", () => {
+    // The production loop: another bot's prompt arrives, never parses, and both
+    // sides re-prompt each other indefinitely.
+    let state: FlowState = { ...initialState(choiceFlow), currentNodeId: "q" };
+    const sent: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const r = step(choiceFlow, state, { text: "בחירה לא מוכרת, נסה שוב (מכירה / תמיכה / אחר)" });
+      state = r.state;
+      for (const a of r.actions) if (a.kind === "send_message") sent.push(a.text);
+      if (state.status !== "active") break;
+    }
+    expect(state.status).toBe("handoff");
+    // Bounded: MAX_RETRIES prompts, then it stops replying.
+    expect(sent).toHaveLength(MAX_RETRIES);
+  });
+
+  it("stays silent once handed off, so the exchange terminates", () => {
+    const handed: FlowState = {
+      ...initialState(choiceFlow),
+      currentNodeId: "q",
+      status: "handoff",
+    };
+    const r = step(choiceFlow, handed, { text: "עוד הודעה" });
+    expect(r.actions).toEqual([]);
+  });
+
+  it("keeps currentNodeId on handoff so the runtime does not restart it", () => {
+    let state: FlowState = { ...initialState(choiceFlow), currentNodeId: "q", retries: MAX_RETRIES };
+    state = step(choiceFlow, state, { text: "לא תקין" }).state;
+    expect(state.status).toBe("handoff");
+    expect(state.currentNodeId).toBe("q");
   });
 });

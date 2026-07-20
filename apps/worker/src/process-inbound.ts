@@ -23,6 +23,13 @@ import {
 
 const HOUR = 3600 * 1000;
 
+/**
+ * Reply-rate ceiling per contact. A real conversation never needs this many
+ * bot messages in a minute; an auto-responder exchange reaches it in seconds.
+ */
+const LOOP_WINDOW_MS = 60_000;
+const LOOP_MAX_REPLIES = 8;
+
 const log = childLogger("worker:inbound");
 
 /**
@@ -116,6 +123,28 @@ export async function processInbound(job: InboundJob): Promise<void> {
     contactFields: (contact.fields as Record<string, unknown>) ?? {},
     contactName: contact.name,
   };
+  // Loop guard, independent of the engine's retry cap.
+  //
+  // The retry cap only catches exchanges where our side fails to parse. Two
+  // bots whose messages each parse cleanly would still ping-pong forever, so
+  // this bounds how often we will reply to one contact at all. Crossing the
+  // threshold pauses the conversation for a human rather than dropping it.
+  const recentReplies = await prisma.message.count({
+    where: {
+      conversation: { contactId: contact.id },
+      direction: "OUT",
+      createdAt: { gte: new Date(Date.now() - LOOP_WINDOW_MS) },
+    },
+  });
+  if (recentReplies >= LOOP_MAX_REPLIES) {
+    await prisma.conversation.update({ where: { id: convo.id }, data: { status: "HANDOFF" } });
+    log.warn(
+      { contactId: contact.id, conversationId: convo.id, recentReplies },
+      "reply rate limit hit — pausing conversation (possible bot-to-bot loop)",
+    );
+    return;
+  }
+
   const prevState = convo.state as unknown as Partial<FlowState>;
 
   // Branch 1: paused for a booking slot choice.

@@ -15,6 +15,13 @@ import type {
  * runtime to execute. This is what makes the bot brain reusable and testable.
  */
 
+/**
+ * How many unparseable answers a single question tolerates before the
+ * conversation is handed to a human. Low on purpose: a real person who has
+ * misunderstood three times needs a person, not a fourth identical prompt.
+ */
+export const MAX_RETRIES = 3;
+
 /** Begin (or restart) a flow: walk from the start node until we wait or end. */
 export function start(flow: FlowDefinition): StepResult {
   const state: FlowState = {
@@ -69,6 +76,22 @@ export function step(
       node.expect === "choice" && node.choices
         ? ` (${node.choices.join(" / ")})`
         : "";
+
+    // Give up rather than re-prompt forever. An unbounded retry is how this
+    // ends up in an infinite exchange with another auto-responder: neither side
+    // can parse the other, both re-prompt, and nothing ever advances.
+    //
+    // `currentNodeId` is deliberately left intact — a handoff is a paused
+    // conversation, not a finished one, and the runtime restarts anything whose
+    // node is null.
+    if (retries > MAX_RETRIES) {
+      return {
+        state: { ...state, retries, status: "handoff" },
+        actions: [{ kind: "handoff_to_human" }],
+        awaitingInput: false,
+      };
+    }
+
     return {
       state: { ...state, retries },
       actions: [{ kind: "send_message", text: `${parsed.message}${hint}` }],
