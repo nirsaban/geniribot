@@ -41,7 +41,8 @@ export async function registerAction(
   });
 
   await createSession({ sub: user.id, org: user.organizationId, role: "OWNER" });
-  redirect("/dashboard/onboarding");
+  // New tenants pick a plan first, then continue to onboarding.
+  redirect("/dashboard/billing?welcome=1");
 }
 
 export async function loginAction(

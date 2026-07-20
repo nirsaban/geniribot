@@ -18,16 +18,21 @@ export async function checkoutAction(formData: FormData): Promise<void> {
   const plan = String(formData.get("plan") ?? "") as PlanId;
   if (!(plan in PLANS)) redirect("/dashboard/billing");
 
+  const org = await prisma.organization.findUnique({ where: { id: session.org } });
+  const firstTime = !org?.onboardedAt;
+
   if (plan === "FREE") {
     await prisma.organization.update({ where: { id: session.org }, data: { plan: "FREE" } });
     revalidatePath("/dashboard/billing");
-    redirect("/dashboard/billing");
+    // First-time tenants continue to setup right after choosing a plan.
+    redirect(firstTime ? "/dashboard/onboarding" : "/dashboard/billing");
   }
 
   const provider = await growPlatformProvider();
   if (!provider) {
     // Platform payments not set up yet — the super admin unlocks plans manually.
-    redirect("/dashboard/billing?pending=1");
+    // A brand-new tenant shouldn't be blocked from setup while that happens.
+    redirect(firstTime ? "/dashboard/onboarding" : "/dashboard/billing?pending=1");
   }
 
   const base = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";

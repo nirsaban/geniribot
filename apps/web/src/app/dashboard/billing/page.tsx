@@ -13,21 +13,27 @@ const ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ paid?: string; pending?: string }>;
+  searchParams: Promise<{ paid?: string; pending?: string; welcome?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { paid, pending } = await searchParams;
+  const { paid, pending, welcome } = await searchParams;
 
   const org = await prisma.organization.findUnique({ where: { id: session.org } });
   if (!org) redirect("/login");
   const current = org.plan as PlanId;
+  const firstTime = !org.onboardedAt;
+
+  // A first-time tenant who just paid continues straight to setup.
+  if (paid && firstTime) redirect("/dashboard/onboarding");
 
   return (
     <>
       <PageHeader
-        title={he.billingTitle}
-        subtitle={`${he.currentPlan}: ${PLANS[current].name}`}
+        title={welcome || firstTime ? he.choosePlanTitle : he.billingTitle}
+        subtitle={
+          welcome || firstTime ? he.choosePlanSubtitle : `${he.currentPlan}: ${PLANS[current].name}`
+        }
       />
 
       {paid && <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">התשלום התקבל, המסלול עודכן ✅</div>}
