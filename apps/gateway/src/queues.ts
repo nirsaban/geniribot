@@ -17,6 +17,8 @@ export interface InboundJob {
   from: string;
   /** Full sender JID (`…@s.whatsapp.net` / `…@lid`); optional on legacy jobs. */
   fromJid?: string;
+  /** Real phone number, when a LID chat could be resolved to one. */
+  senderPn?: string;
   text: string;
   externalId: string;
 }

@@ -135,15 +135,14 @@ describe("isHiddenNumber", () => {
     );
   });
 
-  it("trusts waJid over length when it is present", () => {
-    // A short LID is still a LID, and a long-but-real number is still real.
-    expect(isHiddenNumber({ phone: "123", waJid: "123@lid" })).toBe(true);
-    expect(isHiddenNumber({ phone: "12345678901234", waJid: "12345678901234@s.whatsapp.net" })).toBe(
-      false,
-    );
+  it("is not hidden once a LID chat has been resolved to a real number", () => {
+    // The regression this guards: after baileys resolves the phone number we
+    // store it in `phone` while `waJid` stays @lid (it is still the address we
+    // reply to). Judging on waJid would hide a number we actually know.
+    expect(isHiddenNumber({ phone: "972532898849", waJid: "14396898152593@lid" })).toBe(false);
   });
 
-  it("falls back to length for rows saved before waJid existed", () => {
+  it("judges the stored number, not the addressing", () => {
     // Real LIDs seen in production (14–15 digits).
     expect(isHiddenNumber({ phone: "14396898152593", waJid: null })).toBe(true);
     expect(isHiddenNumber({ phone: "244808924831934", waJid: null })).toBe(true);

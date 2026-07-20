@@ -17,7 +17,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "baileys": "6.7.18",
+    "baileys": "7.0.0-rc13",
     "pino": "^9.6.0"
   },
   "devDependencies": {

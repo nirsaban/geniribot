@@ -32,9 +32,12 @@ const log = childLogger("worker:inbound");
  * appointment → resume) is handled here because it needs DB I/O.
  */
 export async function processInbound(job: InboundJob): Promise<void> {
-  const { organizationId, connectionId, from, fromJid, text } = job;
+  const { organizationId, connectionId, from, fromJid, senderPn, text } = job;
 
-  const contact = await resolveContact(organizationId, from, fromJid);
+  // When a LID chat resolved to a real number, `from` is that number and the
+  // LID is what any earlier contact was filed under.
+  const legacyKey = senderPn && fromJid?.endsWith("@lid") ? fromJid.split("@")[0] : undefined;
+  const contact = await resolveContact(organizationId, from, fromJid, legacyKey);
 
   let convo = await prisma.conversation.findFirst({
     where: { organizationId, contactId: contact.id, status: "ACTIVE" },
@@ -137,10 +140,50 @@ export async function processInbound(job: InboundJob): Promise<void> {
   await applyAndPersist(flow, result, ctx);
 }
 
-/** Find-or-create a contact, tolerant of the concurrent-message create race. */
-async function resolveContact(organizationId: string, phone: string, waJid?: string) {
+/**
+ * Find-or-create a contact, tolerant of the concurrent-message create race.
+ *
+ * `legacyKey` is the LID user part, passed when `phone` is a newly resolved
+ * real number. Leads who wrote before we could resolve their number are stored
+ * under the LID, and without this they would silently fork into a second
+ * contact — losing their conversation history, notes and pipeline status at the
+ * exact moment we finally learned who they are.
+ */
+async function resolveContact(
+  organizationId: string,
+  phone: string,
+  waJid?: string,
+  legacyKey?: string,
+) {
   const where = { organizationId_phone: { organizationId, phone } };
-  const existing = await prisma.contact.findUnique({ where });
+  let existing = await prisma.contact.findUnique({ where });
+
+  if (!existing && legacyKey && legacyKey !== phone) {
+    const legacy = await prisma.contact.findUnique({
+      where: { organizationId_phone: { organizationId, phone: legacyKey } },
+    });
+    if (legacy) {
+      try {
+        const migrated = await prisma.contact.update({
+          where: { id: legacy.id },
+          data: { phone, waJid },
+        });
+        log.info({ contactId: legacy.id, from: legacyKey, to: phone }, "lid contact resolved to phone");
+        return migrated;
+      } catch (err) {
+        // A contact already exists under the real number (they also wrote from
+        // a non-LID chat). Fall through and use that one; merging the two is a
+        // destructive operation and not something to do implicitly.
+        if ((err as { code?: string }).code !== "P2002") throw err;
+        existing = await prisma.contact.findUnique({ where });
+        log.warn(
+          { legacyContactId: legacy.id, phone },
+          "lid contact resolved to an existing phone contact; leaving both",
+        );
+      }
+    }
+  }
+
   if (existing) {
     // Backfill/refresh the routable JID — contacts created before this field
     // existed have none, and a sender can migrate to LID addressing later.

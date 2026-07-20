@@ -31,6 +31,18 @@ export interface InboundMessage {
    * Baileys then sends into the void without throwing. Reply to `fromJid`.
    */
   fromJid: string;
+  /**
+   * The alternate address WhatsApp attached to this message, if any. For a LID
+   * chat this is the phone-number JID. Raw — use `senderPn` for the resolved
+   * number.
+   */
+  senderAltJid?: string | null;
+  /**
+   * The sender's real phone number, once resolved for a LID chat. Absent when
+   * WhatsApp does not expose it, in which case `from` is still the LID and the
+   * CRM shows the contact as "hidden number".
+   */
+  senderPn?: string;
   text: string;
   /** Provider message id, for idempotency. */
   externalId: string;

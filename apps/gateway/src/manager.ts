@@ -140,6 +140,7 @@ export class SessionManager {
         connectionId: msg.connectionId,
         from: msg.from,
         fromJid: msg.fromJid,
+        senderPn: msg.senderPn,
         text: msg.text,
         externalId: msg.externalId,
       },

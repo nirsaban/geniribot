@@ -91,17 +91,17 @@ export function formatFieldValue(spec: FieldSpec | undefined, value: unknown): s
  * anyone can dial, and it is not derived from one.
  */
 export function isHiddenNumber(contact: { phone: string; waJid?: string | null }): boolean {
-  // Exact for anything stored since waJid was added.
-  if (contact.waJid) return contact.waJid.endsWith("@lid");
-
-  // Older rows have no waJid, so fall back to length. Israeli numbers are 12
-  // digits (972…) and international ones run to 13; the LIDs WhatsApp issues
-  // are 14–15. The threshold sits in that gap.
+  // Judged on the stored number itself, deliberately not on `waJid`. Once a LID
+  // chat has been resolved to a real number, `phone` holds that number while
+  // `waJid` still ends in @lid — that is the address we reply to, and says
+  // nothing about whether we know the person's phone number.
   //
-  // Imperfect by nature: a genuine 14-digit international number would be
-  // mislabelled. That is the safer direction to err — calling a real number
-  // "hidden" is a visible annoyance, whereas printing a LID as a phone number
-  // sends someone off to dial digits that were never a phone number.
+  // Israeli numbers are 12 digits (972…) and international ones run to 13; the
+  // LIDs WhatsApp issues are 14–15, so the threshold sits in that gap.
+  // Imperfect: a genuine 14-digit international number would be mislabelled.
+  // That is the safer direction to err — calling a real number "hidden" is a
+  // visible annoyance, whereas printing a LID as a phone number sends someone
+  // off to dial digits that were never a phone number.
   return contact.phone.replace(/\D/g, "").length > 13;
 }
 

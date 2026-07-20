@@ -1,4 +1,3 @@
-import { createRequire } from "node:module";
 import {
   BufferJSON,
   DisconnectReason,
@@ -6,6 +5,7 @@ import {
   initAuthCreds,
   makeCacheableSignalKeyStore,
   makeWASocket,
+  proto,
 } from "baileys";
 import type {
   AuthenticationCreds,
@@ -15,12 +15,10 @@ import type {
 } from "baileys";
 import pino from "pino";
 
-// `proto` is re-exported by baileys via `export *`, which Node's CJS→ESM named
-// export detection misses at runtime. Pull it from the CJS module directly.
-const requireCjs = createRequire(import.meta.url);
-const { proto } = requireCjs("baileys") as {
-  proto: { Message: { AppStateSyncKeyData: { fromObject(o: unknown): unknown } } };
-};
+// baileys 7 ships as pure ESM, so `proto` is a normal named import. (Under 6.x
+// it had to be pulled from the CJS module via createRequire, because Node's
+// CJS→ESM named-export detection missed it — that no longer applies, and would
+// now fail outright since there is no CJS build to require.)
 import type {
   AuthStore,
   ConnectionStatus,
@@ -183,9 +181,48 @@ export class BaileysProvider implements WhatsAppProvider {
       if (type !== "notify") return;
       for (const m of messages) {
         const inbound = normalizeInbound(connectionId, m);
-        if (inbound) void this.handlers.onInbound(inbound);
+        if (!inbound) continue;
+        // Resolving the LID→phone mapping is async, so it happens here rather
+        // than inside the pure normalizer.
+        void this.withResolvedPhone(sock, inbound).then((msg) => this.handlers.onInbound(msg));
       }
     });
+  }
+
+  /**
+   * Fill in the sender's real phone number for LID ("hidden number") chats.
+   *
+   * WhatsApp addresses these with an opaque id, so `from` would otherwise hold
+   * something undialable. Two sources, cheapest first:
+   *
+   *  1. `key.remoteJidAlt` — the alternate address carried on the message
+   *     itself, present when WhatsApp already knows both identities.
+   *  2. `signalRepository.lidMapping.getPNForLID` — the mapping store, fed by
+   *     history sync at pair time.
+   *
+   * Best-effort: if neither knows the number we keep the LID, exactly as
+   * before. A lookup failure must never drop a lead's message.
+   */
+  private async withResolvedPhone(
+    sock: WASocket,
+    msg: import("./index.js").InboundMessage,
+  ): Promise<import("./index.js").InboundMessage> {
+    if (!msg.fromJid.endsWith("@lid")) return msg;
+
+    const fromAlt = toPhoneUser(msg.senderAltJid);
+    if (fromAlt) return { ...msg, from: fromAlt, senderPn: fromAlt };
+
+    try {
+      const pn = await sock.signalRepository.lidMapping.getPNForLID(msg.fromJid);
+      const user = toPhoneUser(pn);
+      if (user) return { ...msg, from: user, senderPn: user };
+    } catch (err) {
+      logger.warn({ err, jid: msg.fromJid }, "lid→pn lookup failed");
+    }
+    if (TRACE_INBOUND) {
+      trace.info({ connectionId: msg.connectionId, jid: msg.fromJid }, "lid→pn unresolved");
+    }
+    return msg;
   }
 
   private async scheduleReconnect(connectionId: string, session: Session): Promise<void> {
@@ -262,12 +299,34 @@ export class BaileysProvider implements WhatsAppProvider {
   }
 }
 
+/**
+ * The user part of a phone-number JID, or null for anything else.
+ *
+ * Guards against treating a second LID (or a group/broadcast address) as a
+ * phone number just because it turned up in an "alternate address" slot.
+ */
+function toPhoneUser(jid: string | null | undefined): string | null {
+  if (!jid || !jid.includes("@s.whatsapp.net")) return null;
+  const user = jid.split("@")[0]?.split(":")[0] ?? "";
+  return /^\d{6,15}$/.test(user) ? user : null;
+}
+
 function toJid(to: string): string {
   return to.includes("@") ? to : `${to.replace(/[^\d]/g, "")}@s.whatsapp.net`;
 }
 
 interface WAMessageLike {
-  key: { remoteJid?: string | null; fromMe?: boolean | null; id?: string | null };
+  key: {
+    remoteJid?: string | null;
+    fromMe?: boolean | null;
+    id?: string | null;
+    /**
+     * Alternate addresses, added in baileys 7: when a chat is LID-addressed
+     * these carry the phone-number JID (and vice versa).
+     */
+    remoteJidAlt?: string | null;
+    participantAlt?: string | null;
+  };
   message?: {
     conversation?: string | null;
     extendedTextMessage?: { text?: string | null } | null;
@@ -311,6 +370,9 @@ function normalizeInbound(
     connectionId,
     from: jid.split("@")[0] ?? jid,
     fromJid: jid,
+    // The alternate address WhatsApp attached to this message, if any — for a
+    // LID chat this is the phone-number JID. Resolved into `from` by the caller.
+    senderAltJid: m.key.remoteJidAlt ?? m.key.participantAlt ?? null,
     text,
     externalId: m.key.id ?? `${jid}-${timestamp}`,
     timestamp,
