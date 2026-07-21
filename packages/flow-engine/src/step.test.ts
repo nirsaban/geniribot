@@ -112,6 +112,38 @@ describe("evalCondition", () => {
   });
 });
 
+describe("choice questions show their options", () => {
+  const ask = (state: FlowState) =>
+    step(flow, state, { text: "רן" }).actions.flatMap((a) =>
+      a.kind === "send_message" ? [a.text] : [],
+    );
+
+  it("sends a numbered menu with the prompt", () => {
+    const sent = ask({ ...initialState(flow), currentNodeId: "n2" });
+    expect(sent).toEqual(["במה נעזור?\n1. מכירה\n2. תמיכה"]);
+  });
+
+  it("lets the lead answer with the number it just showed", () => {
+    let state: FlowState = { ...initialState(flow), currentNodeId: "n3" };
+    const r = step(flow, state, { text: "2" });
+    expect(r.actions).toContainEqual({ kind: "save_field", field: "service", value: "תמיכה" });
+    expect(r.state.retries).toBe(0);
+  });
+
+  it("leaves non-choice questions untouched", () => {
+    const r = start(flow);
+    expect(r.actions).toContainEqual({ kind: "send_message", text: "מה השם שלך?" });
+  });
+
+  it("omits the menu when a choice node has no options", () => {
+    const bare = FlowDefinition.parse({
+      start: "q",
+      nodes: { q: { type: "question", field: "x", prompt: "מה?", expect: "choice", next: null } },
+    });
+    expect(start(bare).actions).toContainEqual({ kind: "send_message", text: "מה?" });
+  });
+});
+
 describe("retry cap", () => {
   const choiceFlow = FlowDefinition.parse({
     start: "q",

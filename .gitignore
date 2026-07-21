@@ -29,3 +29,6 @@ data/
 .idea/
 .vscode/
 *.pem
+
+# incremental build state
+*.tsbuildinfo

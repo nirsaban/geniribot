@@ -139,7 +139,7 @@ function walk(
     }
 
     if (node.type === "question") {
-      acc.push({ kind: "send_message", text: node.prompt });
+      acc.push({ kind: "send_message", text: questionText(node) });
       return {
         state: { ...state, answers, currentNodeId: current, retries: 0, status: "active" },
         actions: acc,
@@ -232,6 +232,22 @@ function actionToEffect(
     default:
       return null;
   }
+}
+
+/**
+ * What a question node actually sends.
+ *
+ * A `choice` question MUST show its options. `coerce` accepts a 1-based index,
+ * but the lead can only send one if the numbers were on screen — and it accepts
+ * exact text they were never shown either. Before this, the options first
+ * appeared in the retry hint, i.e. only after the lead had already guessed
+ * wrong, and three wrong guesses hand the conversation to a human (MAX_RETRIES).
+ * A choice node built in the editor therefore read as a broken open question.
+ */
+function questionText(node: Extract<FlowNode, { type: "question" }>): string {
+  if (node.expect !== "choice" || !node.choices?.length) return node.prompt;
+  const menu = node.choices.map((c, i) => `${i + 1}. ${c}`).join("\n");
+  return `${node.prompt}\n${menu}`;
 }
 
 // ---------- Input coercion / validation ----------
