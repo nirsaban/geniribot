@@ -54,6 +54,12 @@ const log = childLogger("worker:inbound");
  * Checked platform-wide rather than per-organization, because the two ends are
  * usually in *different* organizations — that is exactly what makes it look
  * like ordinary lead traffic.
+ *
+ * Only CONNECTED connections count. A number that merely *has* a connection row
+ * — one stuck at QR, or logged out — is not a bot, it is a person holding a
+ * phone; silencing them is what this guard did to the very people most likely
+ * to test their own bot. A real loop needs both ends live, so requiring
+ * CONNECTED loses no protection.
  */
 async function isPlatformNumber(from: string, fromJid?: string): Promise<boolean> {
   const candidates = [from];
@@ -62,6 +68,7 @@ async function isPlatformNumber(from: string, fromJid?: string): Promise<boolean
 
   const hit = await prisma.whatsAppConnection.findFirst({
     where: {
+      status: "CONNECTED",
       OR: [
         { phoneNumber: { in: candidates } },
         { displayPhoneNumber: { in: candidates } },
