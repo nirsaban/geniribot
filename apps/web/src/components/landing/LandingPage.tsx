@@ -34,9 +34,17 @@ export function LandingPage() {
 /* ---------------- ambient background ---------------- */
 function Ambience() {
   return (
-    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {/* single electric-cyan glow, top center */}
-      <div className="absolute -top-40 left-1/2 h-[40rem] w-[60rem] -translate-x-1/2 rounded-full bg-cyan-500/12 blur-[120px]" />
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[60rem] overflow-hidden">
+      {/* single electric-cyan glow, top center — a radial-gradient, not a blur
+          filter: a `position: fixed` + `filter: blur()` combo forces a repaint
+          on every scroll frame on mobile and was the main source of the jank. */}
+      <div
+        className="absolute -top-40 left-1/2 h-[40rem] w-[60rem] -translate-x-1/2 rounded-full"
+        style={{
+          background:
+            "radial-gradient(ellipse 50% 50% at 50% 50%, rgba(34,211,238,0.12), transparent 70%)",
+        }}
+      />
       {/* faint hairline grid, faded toward edges */}
       <div
         className="absolute inset-0 opacity-[0.06]"
@@ -54,8 +62,11 @@ function Ambience() {
 /* ---------------- nav ---------------- */
 function Nav() {
   const n = landing.nav;
+  // solid bg on mobile — backdrop-blur on a sticky header repaints every
+  // scroll frame and is a major source of mobile scroll jank; keep the
+  // frosted-glass look only where scroll compositing is cheap (desktop)
   return (
-    <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070a]/70 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-white/5 bg-[#05070a] md:bg-[#05070a]/70 md:backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
         <Link href="/" className="flex items-center gap-2">
           <Logo />
@@ -155,7 +166,10 @@ function Stats() {
   return (
     <div className="absolute inset-x-0 bottom-0 z-20">
       <div className="mx-auto max-w-6xl px-5">
-        <div className="grid grid-cols-2 overflow-hidden rounded-t-2xl border border-b-0 border-white/10 bg-[#05070a]/85 backdrop-blur-md md:grid-cols-4">
+        {/* no backdrop-blur here: it sits over the autoplaying video, so
+            blurring would mean re-blurring a changing frame every tick —
+            solid-enough opacity reads the same without the per-frame cost */}
+        <div className="grid grid-cols-2 overflow-hidden rounded-t-2xl border border-b-0 border-white/10 bg-[#05070a]/95 md:grid-cols-4">
           {landing.stats.map((s, i) => (
             <div
               key={s.label}
@@ -304,7 +318,12 @@ function FinalCta() {
     <section className="relative z-10 mx-auto max-w-5xl px-5 py-24">
       <Reveal>
         <div className="relative overflow-hidden rounded-3xl border border-cyan-400/25 bg-gradient-to-br from-cyan-500/10 via-[#070c12] to-[#05070a] p-12 text-center md:p-16">
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-96 -translate-x-1/2 rounded-full bg-cyan-400/20 blur-[90px]" />
+          <div
+            className="pointer-events-none absolute -top-24 left-1/2 h-64 w-96 -translate-x-1/2 rounded-full"
+            style={{
+              background: "radial-gradient(ellipse 50% 50% at 50% 50%, rgba(34,211,238,0.2), transparent 70%)",
+            }}
+          />
           <h2 className="relative text-3xl font-black tracking-tight text-white md:text-5xl">{f.title}</h2>
           <p className="relative mx-auto mt-5 max-w-xl text-slate-400">{f.subtitle}</p>
           <Link
