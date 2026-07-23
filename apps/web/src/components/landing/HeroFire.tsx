@@ -89,6 +89,9 @@ export function FireCanvas({ className = "" }: { className?: string }) {
     const cv = ref.current;
     if (!cv) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // the shader is too heavy for most phone GPUs (jank/battery/heat) — skip
+    // it on narrow/coarse-pointer viewports and fall back to the CSS glow.
+    if (window.matchMedia("(max-width: 767px), (pointer: coarse)").matches) return;
 
     const rawGl = (cv.getContext("webgl", { alpha: true, antialias: true }) ||
       cv.getContext("experimental-webgl")) as WebGLRenderingContext | null;
@@ -124,7 +127,7 @@ export function FireCanvas({ className = "" }: { className?: string }) {
       }
       float fbm(vec2 p) {
         float v = 0.0, a = 0.5;
-        for (int i = 0; i < 6; i++) { v += a * noise(p); p *= 2.02; a *= 0.5; }
+        for (int i = 0; i < 4; i++) { v += a * noise(p); p *= 2.02; a *= 0.5; }
         return v;
       }
 
@@ -216,15 +219,17 @@ export function FireCanvas({ className = "" }: { className?: string }) {
 
     let raf = 0;
     let start = 0;
+    let running = true;
 
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1);
       canvas.width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
       canvas.height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
       gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
     function frame(now: number) {
+      if (!running) return;
       if (!start) start = now;
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -234,12 +239,28 @@ export function FireCanvas({ className = "" }: { className?: string }) {
       raf = requestAnimationFrame(frame);
     }
 
+    // stop drawing once the hero scrolls out of view — no point burning
+    // GPU/battery on an animation nobody can see
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        running = entry.isIntersecting;
+        if (running) {
+          raf = requestAnimationFrame(frame);
+        } else {
+          cancelAnimationFrame(raf);
+        }
+      },
+      { threshold: 0 },
+    );
+    io.observe(canvas);
+
     resize();
     window.addEventListener("resize", resize);
-    raf = requestAnimationFrame(frame);
 
     return () => {
+      running = false;
       cancelAnimationFrame(raf);
+      io.disconnect();
       window.removeEventListener("resize", resize);
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
