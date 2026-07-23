@@ -155,33 +155,6 @@ body {
   }
 }
 
-/* ---------- Landing hero artwork (NOVI-style) ---------- */
-@keyframes seamPulse {
-  0%, 100% { opacity: 0.55; transform: scale(0.96); transform-origin: 330px 250px; }
-  50% { opacity: 1; transform: scale(1.06); transform-origin: 330px 250px; }
-}
-@keyframes tipPulse {
-  0%, 100% { r: 5; opacity: 0.8; }
-  50% { r: 8; opacity: 1; }
-}
-@keyframes energyFlow {
-  to { stroke-dashoffset: -40; }
-}
-@keyframes tileIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes handFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-
-.seam-pulse { animation: seamPulse 4s ease-in-out infinite; }
-.tip-pulse { animation: tipPulse 2.2s ease-in-out infinite; }
-.energy { animation: energyFlow 1.4s linear infinite; }
-.hero-art .tile { animation: tileIn 0.6s ease-out both; }
-.hero-art .hand { animation: handFloat 7s ease-in-out infinite; }
-
 /* scroll-reveal (IntersectionObserver toggles .is-in) */
 .reveal {
   opacity: 0;
@@ -192,7 +165,6 @@ body {
 .reveal.is-in { opacity: 1; transform: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-float, .animate-fade-up, .animate-pop, .animate-blob, .gradient-text,
-  .seam-pulse, .tip-pulse, .energy, .hero-art .tile, .hero-art .hand { animation: none; }
+  .animate-float, .animate-fade-up, .animate-pop, .animate-blob, .gradient-text { animation: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
 }

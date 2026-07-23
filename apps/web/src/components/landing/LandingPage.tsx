@@ -2,11 +2,10 @@ import Link from "next/link";
 import { he } from "@/lib/he";
 import { landing } from "./copy";
 import { Pricing } from "./Pricing";
-import { ParticleField } from "./ParticleField";
-import { HeroArt } from "./HeroArt";
 import { Reveal } from "./Reveal";
 import { CountUp } from "./CountUp";
 import { TypingChat } from "./TypingChat";
+import { FireCanvas } from "./HeroFire";
 
 /**
  * Public marketing landing page — cinematic dark theme (NOVI-style): near-black
@@ -19,8 +18,8 @@ export function LandingPage() {
     <div className="relative min-h-screen overflow-x-hidden bg-[#05070a] text-slate-300 antialiased">
       <Ambience />
       <Nav />
-      <Hero />
-      <Stats />
+      <HeroContent />
+      <HeroVideo />
       <Showcase />
       <How />
       <Features />
@@ -88,14 +87,19 @@ function Nav() {
 }
 
 /* ---------------- hero ---------------- */
-function Hero() {
+function HeroContent() {
   const h = landing.hero;
   return (
-    <section className="relative z-10 overflow-hidden border-b border-white/5">
-      <ParticleField className="absolute inset-0 -z-10 h-full w-full opacity-70" />
-      <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-20 pt-14 md:grid-cols-2 md:pb-28 md:pt-20">
-        {/* text column (right, in RTL) */}
-        <div>
+    <section className="relative isolate z-10 overflow-hidden border-b border-white/5 bg-[#05070a]">
+      {/* ambient ember glow (also the no-WebGL fallback) */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-20 h-2/3 bg-[radial-gradient(ellipse_70%_100%_at_50%_100%,rgba(34,211,238,0.28),transparent_70%)]" />
+      {/* the fire */}
+      <FireCanvas className="absolute inset-0 -z-10 h-full w-full" />
+      {/* keep text legible over the flames */}
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-t from-[#05070a]/70 via-[#05070a]/25 to-[#05070a]/55" />
+
+      <div className="mx-auto max-w-6xl px-5 py-14 md:py-20">
+        <div className="max-w-2xl">
           <Eyebrow>{landing.eyebrows.hero}</Eyebrow>
           <h1 className="animate-fade-up mt-5 text-[2.6rem] font-black leading-[0.98] tracking-tight text-white sm:text-6xl md:text-[4.1rem]">
             {h.title}
@@ -124,12 +128,24 @@ function Hero() {
           </div>
           <p className="mt-5 text-sm text-slate-500">{h.note}</p>
         </div>
-
-        {/* artwork column (left, in RTL) */}
-        <div className="animate-fade-up [animation-delay:0.2s]">
-          <HeroArt />
-        </div>
       </div>
+    </section>
+  );
+}
+
+function HeroVideo() {
+  return (
+    <section className="relative z-0 overflow-hidden border-b border-white/5">
+      <video
+        className="h-[46vh] w-full object-cover md:h-[58vh]"
+        src="/hero-puzzle-hands.mp4"
+        poster="/hero-puzzle-hands-poster.jpg"
+        autoPlay
+        muted
+        loop
+        playsInline
+      />
+      <Stats />
     </section>
   );
 }
@@ -137,26 +153,30 @@ function Hero() {
 /* ---------------- stats ---------------- */
 function Stats() {
   return (
-    <section className="relative z-10 border-b border-white/5">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 md:grid-cols-4">
-        {landing.stats.map((s, i) => (
-          <div
-            key={s.label}
-            className={[
-              "px-5 py-8 text-center md:py-10",
-              i % 2 === 1 ? "border-r border-white/5" : "",
-              i < 2 ? "border-b border-white/5 md:border-b-0" : "",
-              i > 0 && i % 4 !== 0 ? "md:border-r md:border-white/5" : "",
-            ].join(" ")}
-          >
-            <p className="bg-gradient-to-l from-cyan-200 to-sky-400 bg-clip-text text-3xl font-black text-transparent md:text-4xl">
-              <CountUp value={s.value} />
-            </p>
-            <p className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-500">{s.label}</p>
-          </div>
-        ))}
+    <div className="absolute inset-x-0 bottom-0 z-20">
+      <div className="mx-auto max-w-6xl px-5">
+        <div className="grid grid-cols-2 overflow-hidden rounded-t-2xl border border-b-0 border-white/10 bg-[#05070a]/85 backdrop-blur-md md:grid-cols-4">
+          {landing.stats.map((s, i) => (
+            <div
+              key={s.label}
+              className={[
+                "px-2 py-2.5 text-center sm:px-5 sm:py-6 md:py-8",
+                i % 2 === 1 ? "border-r border-white/5" : "",
+                i < 2 ? "border-b border-white/5 md:border-b-0" : "",
+                i > 0 && i % 4 !== 0 ? "md:border-r md:border-white/5" : "",
+              ].join(" ")}
+            >
+              <p className="bg-gradient-to-l from-cyan-200 to-sky-400 bg-clip-text text-sm font-black text-transparent sm:text-2xl md:text-3xl">
+                <CountUp value={s.value} />
+              </p>
+              <p className="mt-0.5 text-[9px] uppercase leading-tight tracking-[0.1em] text-slate-500 sm:mt-1 sm:text-xs sm:tracking-[0.14em]">
+                {s.label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
