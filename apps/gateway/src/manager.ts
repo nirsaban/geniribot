@@ -96,6 +96,20 @@ export class SessionManager {
     await this.provider.send({ connectionId, to, toJid, text });
   }
 
+  async createGroup(
+    connectionId: string,
+    subject: string,
+    phones: string[],
+  ): Promise<{ groupJid: string; added: string[]; failed: string[] }> {
+    if (await this.isCloud(connectionId)) {
+      throw new Error("group creation is not supported on Cloud API connections");
+    }
+    if (!this.provider.createGroup) {
+      throw new Error("provider does not support group creation");
+    }
+    return this.provider.createGroup(connectionId, subject, phones);
+  }
+
   private async isCloud(connectionId: string): Promise<boolean> {
     const c = await prisma.whatsAppConnection.findUnique({
       where: { id: connectionId },

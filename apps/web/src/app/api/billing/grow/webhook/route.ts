@@ -1,40 +1,69 @@
 import { NextResponse } from "next/server";
-import { PLANS, type PlanId } from "@kesher/billing";
-import { prisma } from "@kesher/db";
+import type { GrowCallback } from "@kesher/billing";
+import { growPlatformProvider } from "@/lib/billing";
+import { applyGrowPayment } from "@/lib/subscriptions";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Grow (Meshulam) payment callback. Grow POSTs the transaction result with our
- * custom fields (cField1 = organizationId, cField2 = plan). On success we set
- * the org's plan. Accepts form-encoded or JSON.
+ * Grow (Meshulam) payment callback — fires on the first charge AND on every
+ * recurring renewal of the managed payment page. Our custom fields carry
+ * cField1 = organizationId, cField2 = plan, cField3 = interval.
  *
- * NOTE: production should additionally verify via Grow's getPaymentProcessInfo
- * (or a signature) before trusting the callback — TODO once we have a merchant
- * account to test against.
+ * Security: the callback itself is unauthenticated, so we NEVER trust it
+ * directly. We re-fetch the transaction from Grow (`getPaymentProcessInfo`) and
+ * only act on the authoritative result. Deliveries are deduped by transaction
+ * id (see `applyGrowPayment`), and we ack Grow with `approveTransaction`.
  */
 export async function POST(req: Request) {
-  let data: Record<string, string> = {};
+  let raw: GrowCallback = {};
   const ct = req.headers.get("content-type") ?? "";
   try {
     if (ct.includes("application/json")) {
-      data = (await req.json()) as Record<string, string>;
+      raw = (await req.json()) as GrowCallback;
     } else {
       const form = await req.formData();
-      for (const [k, v] of form.entries()) data[k] = String(v);
+      for (const [k, v] of form.entries()) raw[k] = String(v);
     }
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
 
-  const orgId = data.cField1 ?? data.organizationId;
-  const plan = (data.cField2 ?? data.plan) as PlanId | undefined;
-  const status = data.status ?? data.statusCode;
-
-  if (orgId && plan && plan in PLANS && (status === "1" || status === undefined)) {
-    await prisma.organization
-      .update({ where: { id: orgId }, data: { plan } })
-      .catch(() => {});
+  const provider = await growPlatformProvider();
+  if (!provider) {
+    // Cannot verify without platform credentials — refuse to act on an
+    // unverifiable callback rather than trust it.
+    return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
   }
-  return NextResponse.json({ ok: true });
+
+  const processId = raw.processId;
+  const processToken = raw.processToken;
+  if (!processId || !processToken) {
+    return NextResponse.json({ ok: false, error: "missing_process" }, { status: 400 });
+  }
+
+  const verified = await provider.verifyTransaction(processId, processToken);
+  if (!verified) {
+    // Not a real, successful transaction — ignore.
+    return NextResponse.json({ ok: false, error: "unverified" }, { status: 400 });
+  }
+
+  // Authoritative data wins; keep our echoed custom fields if Grow omits them.
+  const cb: GrowCallback = { ...raw, ...stripUndefined(verified) };
+  cb.cField1 = verified.cField1 ?? raw.cField1;
+  cb.cField2 = verified.cField2 ?? raw.cField2;
+  cb.cField3 = verified.cField3 ?? raw.cField3;
+
+  const result = await applyGrowPayment(cb);
+
+  // Best-effort acknowledgement back to Grow.
+  await provider.approveTransaction(cb);
+
+  return NextResponse.json({ ok: true, applied: result.applied, reason: result.reason });
+}
+
+function stripUndefined(o: GrowCallback): GrowCallback {
+  const out: GrowCallback = {};
+  for (const [k, v] of Object.entries(o)) if (v !== undefined) out[k] = v;
+  return out;
 }

@@ -4,13 +4,17 @@ import { childLogger } from "@kesher/core";
 import {
   bullConnection,
   connection,
+  DELAYS_QUEUE,
   INBOUND_QUEUE,
   REMINDERS_QUEUE,
+  type DelayJob,
   type InboundJob,
   type ReminderJob,
 } from "./queues.js";
-import { processInbound } from "./process-inbound.js";
+import { processDelay, processInbound } from "./process-inbound.js";
 import { processReminder } from "./process-reminder.js";
+import { processFollowUps } from "./process-followups.js";
+import { processBroadcasts } from "./process-broadcasts.js";
 
 const log = childLogger("worker");
 
@@ -41,6 +45,32 @@ reminderWorker.on("failed", (job, err) => {
   log.error({ jobId: job?.id, err }, "reminder job failed");
 });
 
+// Flow delay timers: resume conversations whose `delay` node elapsed.
+const delayWorker = new Worker<DelayJob>(
+  DELAYS_QUEUE,
+  async (job) => {
+    await processDelay(job.data);
+  },
+  { connection: bullConnection, concurrency: 4 },
+);
+delayWorker.on("failed", (job, err) => {
+  log.error({ jobId: job?.id, err }, "delay resume failed");
+});
+
+// Broadcast sweep: pick up due (scheduled) broadcasts every minute.
+const BROADCAST_SWEEP_MS = 60 * 1000;
+const broadcastTimer = setInterval(() => {
+  processBroadcasts().catch((err) => log.error({ err }, "broadcast sweep failed"));
+}, BROADCAST_SWEEP_MS);
+
+// Cold-lead follow-up sweep. A plain interval (not a BullMQ repeatable job)
+// because there is exactly one worker process and the sweep is idempotent —
+// each run re-derives who is due from the DB.
+const FOLLOWUP_SWEEP_MS = 15 * 60 * 1000;
+const followUpTimer = setInterval(() => {
+  processFollowUps().catch((err) => log.error({ err }, "follow-up sweep failed"));
+}, FOLLOWUP_SWEEP_MS);
+
 // Tiny health server so the container has a liveness probe.
 const PORT = Number(process.env.WORKER_HEALTH_PORT ?? 4021);
 http
@@ -58,8 +88,11 @@ log.info("worker started; consuming " + INBOUND_QUEUE);
 
 async function shutdown() {
   log.info("shutting down worker");
+  clearInterval(followUpTimer);
+  clearInterval(broadcastTimer);
   await worker.close();
   await reminderWorker.close();
+  await delayWorker.close();
   await connection.quit();
   process.exit(0);
 }

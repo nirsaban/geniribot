@@ -34,6 +34,23 @@ export const QuestionNode = z.object({
   prompt: z.string(),
   expect: ExpectType.default("text"),
   choices: z.array(z.string()).optional(),
+  /**
+   * Optional per-choice routing: maps a choice value to the node to jump to.
+   * A choice without an entry falls through to `next`. Makes a single choice
+   * question a real N-way branch instead of routing through condition chains.
+   */
+  branches: z.record(z.string().nullable()).optional(),
+  next: baseNext,
+});
+
+/**
+ * Pause the conversation for a set time, then continue — the building block of
+ * drip sequences ("thanks!", wait 24h, "still interested?"). The engine only
+ * marks the wait; the runtime owns the clock and resumes via resumeDelay().
+ */
+export const DelayNode = z.object({
+  type: z.literal("delay"),
+  minutes: z.number().int().positive(),
   next: baseNext,
 });
 
@@ -57,6 +74,7 @@ export const FlowNode = z.discriminatedUnion("type", [
   QuestionNode,
   ConditionNode,
   ActionNode,
+  DelayNode,
 ]);
 export type FlowNode = z.infer<typeof FlowNode>;
 
@@ -97,8 +115,8 @@ export interface FlowState {
   /** retries for the current waiting question */
   retries: number;
   status: "active" | "completed" | "handoff";
-  /** set when the conversation is paused waiting for a booking slot choice */
-  awaiting?: "booking";
+  /** set when the conversation is paused (booking slot choice / timed delay) */
+  awaiting?: "booking" | "delay";
   /** node to resume at once the pause (e.g. booking) resolves */
   resumeNodeId?: string | null;
   /** worker-populated: slots offered to the lead while awaiting a booking */
@@ -124,7 +142,9 @@ export type EngineAction =
   | { kind: "book_appointment"; params?: Record<string, unknown> }
   | { kind: "webhook"; params?: Record<string, unknown> }
   | { kind: "handoff_to_human" }
-  | { kind: "end" };
+  | { kind: "end" }
+  /** Runtime must schedule a resumeDelay() call after `minutes`. */
+  | { kind: "schedule_delay"; minutes: number; resumeNodeId: string | null };
 
 export interface StepResult {
   state: FlowState;

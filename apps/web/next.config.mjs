@@ -5,6 +5,9 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Optional isolated build output (used for previews so a rebuild never clobbers
+  // the live server's .next). Defaults to the standard directory.
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   ...(basePath ? { basePath } : {}),
   // Workspace packages ship raw TS; let Next transpile them.
   transpilePackages: ["@kesher/core", "@kesher/db"],

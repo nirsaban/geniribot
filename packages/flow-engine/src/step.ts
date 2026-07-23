@@ -49,6 +49,25 @@ export function resumeBooking(flow: FlowDefinition, state: FlowState): StepResul
   return walk(flow, cleared, []);
 }
 
+/**
+ * Resume a flow whose timed delay has elapsed. The runtime calls this from its
+ * scheduled job; a no-op unless the conversation is still in that exact wait
+ * (the lead may have replied meanwhile and moved the flow along).
+ */
+export function resumeDelay(flow: FlowDefinition, state: FlowState): StepResult {
+  if (state.awaiting !== "delay") {
+    return { state, actions: [], awaitingInput: state.status === "active" };
+  }
+  const cleared: FlowState = {
+    ...state,
+    awaiting: undefined,
+    resumeNodeId: undefined,
+    currentNodeId: state.resumeNodeId ?? null,
+    retries: 0,
+  };
+  return walk(flow, cleared, []);
+}
+
 /** Advance the flow with the user's reply to the current question. */
 export function step(
   flow: FlowDefinition,
@@ -59,6 +78,13 @@ export function step(
   // not the pure engine.
   if (state.awaiting === "booking") {
     return { state, actions: [], awaitingInput: true };
+  }
+  // A reply during a timed delay means the lead is engaged NOW — waiting out
+  // the timer to nudge someone who is already talking would be absurd, so the
+  // delay is cut short and the flow continues immediately. The runtime's stale
+  // timer no-ops later because `awaiting` is no longer "delay".
+  if (state.awaiting === "delay") {
+    return resumeDelay(flow, state);
   }
   if (state.status !== "active" || !state.currentNodeId) {
     return { state, actions: [], awaitingInput: false };
@@ -103,11 +129,17 @@ export function step(
   const actions: EngineAction[] = [
     { kind: "save_field", field: node.field, value: parsed.value },
   ];
+  // Per-choice routing: an answer with a declared branch jumps there; anything
+  // else falls through to the question's `next`.
+  const branch =
+    node.branches && String(parsed.value) in node.branches
+      ? node.branches[String(parsed.value)]
+      : node.next;
   const next: FlowState = {
     ...state,
     answers,
     retries: 0,
-    currentNodeId: node.next,
+    currentNodeId: branch ?? null,
   };
   return walk(flow, next, actions);
 }
@@ -139,7 +171,7 @@ function walk(
     }
 
     if (node.type === "question") {
-      acc.push({ kind: "send_message", text: questionText(node) });
+      acc.push({ kind: "send_message", text: renderTemplate(questionText(node), answers) });
       return {
         state: { ...state, answers, currentNodeId: current, retries: 0, status: "active" },
         actions: acc,
@@ -148,9 +180,29 @@ function walk(
     }
 
     if (node.type === "message") {
-      acc.push({ kind: "send_message", text: node.text });
+      acc.push({ kind: "send_message", text: renderTemplate(node.text, answers) });
       current = node.next;
       continue;
+    }
+
+    // Timed pause: emit the scheduling request and stop walking. The runtime
+    // resumes with resumeDelay() when the clock fires (or immediately, if the
+    // lead writes first — see step()).
+    if (node.type === "delay") {
+      acc.push({ kind: "schedule_delay", minutes: node.minutes, resumeNodeId: node.next });
+      return {
+        state: {
+          ...state,
+          answers,
+          currentNodeId: current,
+          awaiting: "delay",
+          resumeNodeId: node.next,
+          retries: 0,
+          status: "active",
+        },
+        actions: acc,
+        awaitingInput: false,
+      };
     }
 
     if (node.type === "condition") {
@@ -248,6 +300,19 @@ function questionText(node: Extract<FlowNode, { type: "question" }>): string {
   if (node.expect !== "choice" || !node.choices?.length) return node.prompt;
   const menu = node.choices.map((c, i) => `${i + 1}. ${c}`).join("\n");
   return `${node.prompt}\n${menu}`;
+}
+
+/**
+ * Fill `{field}` placeholders from collected answers, so later messages can
+ * echo earlier answers ("נעים מאוד {name}!"). Unknown keys are left intact —
+ * the runtime substitutes contact-level values (e.g. `{name}` before the flow
+ * asked for it) and a visible `{typo}` beats silently sending an empty hole.
+ */
+export function renderTemplate(text: string, answers: Record<string, unknown>): string {
+  return text.replace(/\{([\w$]+)\}/g, (whole, key: string) => {
+    const v = answers[key];
+    return v === undefined || v === null ? whole : String(v);
+  });
 }
 
 // ---------- Input coercion / validation ----------

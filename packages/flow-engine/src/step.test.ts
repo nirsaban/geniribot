@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evalCondition, MAX_RETRIES, resumeBooking, start, step } from "./step.js";
+import { evalCondition, MAX_RETRIES, renderTemplate, resumeBooking, resumeDelay, start, step } from "./step.js";
 import { FlowDefinition, initialState, matchesTrigger, triggerSpecificity, type FlowState } from "./types.js";
 
 const flow = FlowDefinition.parse({
@@ -192,5 +192,85 @@ describe("retry cap", () => {
     state = step(choiceFlow, state, { text: "לא תקין" }).state;
     expect(state.status).toBe("handoff");
     expect(state.currentNodeId).toBe("q");
+  });
+});
+
+describe("elastic flow extensions (delay / branches / templates)", () => {
+  const dripFlow = FlowDefinition.parse({
+    start: "n1",
+    nodes: {
+      n1: { type: "question", field: "name", prompt: "מה השם?", expect: "text", next: "n2" },
+      n2: { type: "message", text: "נעים מאוד {name}!", next: "n3" },
+      n3: { type: "delay", minutes: 60, next: "n4" },
+      n4: { type: "message", text: "עדיין רלוונטי, {name}?", next: null },
+    },
+  });
+
+  it("pauses on a delay node and emits schedule_delay", () => {
+    const r1 = start(dripFlow);
+    const r2 = step(dripFlow, r1.state, { text: "דנה" });
+    expect(r2.state.awaiting).toBe("delay");
+    expect(r2.state.resumeNodeId).toBe("n4");
+    expect(r2.awaitingInput).toBe(false);
+    expect(r2.actions).toContainEqual({ kind: "schedule_delay", minutes: 60, resumeNodeId: "n4" });
+    // the interpolated message went out before the pause
+    expect(r2.actions).toContainEqual({ kind: "send_message", text: "נעים מאוד דנה!" });
+  });
+
+  it("resumeDelay continues from the paused node's next with templates filled", () => {
+    const r1 = start(dripFlow);
+    const r2 = step(dripFlow, r1.state, { text: "דנה" });
+    const r3 = resumeDelay(dripFlow, r2.state);
+    expect(r3.state.status).toBe("completed");
+    expect(r3.actions).toContainEqual({ kind: "send_message", text: "עדיין רלוונטי, דנה?" });
+  });
+
+  it("resumeDelay is a no-op when the conversation is not waiting on a delay", () => {
+    const r1 = start(dripFlow);
+    const r3 = resumeDelay(dripFlow, r1.state);
+    expect(r3.actions).toEqual([]);
+    expect(r3.state).toBe(r1.state);
+  });
+
+  it("a reply during a delay cuts the wait short", () => {
+    const r1 = start(dripFlow);
+    const r2 = step(dripFlow, r1.state, { text: "דנה" });
+    const r3 = step(dripFlow, r2.state, { text: "כן עדיין פה" });
+    expect(r3.state.awaiting).toBeUndefined();
+    expect(r3.actions).toContainEqual({ kind: "send_message", text: "עדיין רלוונטי, דנה?" });
+  });
+
+  const branchFlow = FlowDefinition.parse({
+    start: "q",
+    nodes: {
+      q: {
+        type: "question",
+        field: "topic",
+        prompt: "במה מדובר?",
+        expect: "choice",
+        choices: ["מכירות", "תמיכה", "אחר"],
+        branches: { מכירות: "sales", תמיכה: "support" },
+        next: "other",
+      },
+      sales: { type: "message", text: "מעביר למכירות", next: null },
+      support: { type: "message", text: "מעביר לתמיכה", next: null },
+      other: { type: "message", text: "נחזור אליך", next: null },
+    },
+  });
+
+  it("routes a choice answer through its declared branch", () => {
+    const r1 = start(branchFlow);
+    const r2 = step(branchFlow, r1.state, { text: "2" });
+    expect(r2.actions).toContainEqual({ kind: "send_message", text: "מעביר לתמיכה" });
+  });
+
+  it("falls through to next when the choice has no branch", () => {
+    const r1 = start(branchFlow);
+    const r2 = step(branchFlow, r1.state, { text: "אחר" });
+    expect(r2.actions).toContainEqual({ kind: "send_message", text: "נחזור אליך" });
+  });
+
+  it("renderTemplate fills known keys and leaves unknown ones visible", () => {
+    expect(renderTemplate("שלום {name}, {missing}!", { name: "דנה" })).toBe("שלום דנה, {missing}!");
   });
 });

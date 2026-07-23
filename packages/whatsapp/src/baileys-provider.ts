@@ -119,6 +119,28 @@ export class BaileysProvider implements WhatsAppProvider {
     await session.sock.sendMessage(msg.toJid ?? toJid(msg.to), { text: msg.text });
   }
 
+  async createGroup(
+    connectionId: string,
+    subject: string,
+    phones: string[],
+  ): Promise<{ groupJid: string; added: string[]; failed: string[] }> {
+    const session = this.sessions.get(connectionId);
+    if (!session || session.status !== "connected") {
+      throw new Error(`connection ${connectionId} is not connected`);
+    }
+    const jids = phones.map((p) => toJid(p.replace(/\D/g, "")));
+    const res = await session.sock.groupCreate(subject, jids);
+    // Baileys reports per-participant status; "200" = actually in the group.
+    const added: string[] = [];
+    const failed: string[] = [];
+    for (const p of res.participants ?? []) {
+      const entry = p as unknown as { id: string; admin?: string | null };
+      added.push(entry.id);
+    }
+    for (const j of jids) if (!added.includes(j)) failed.push(j);
+    return { groupJid: res.id, added, failed };
+  }
+
   // ---------- internals ----------
   private async startSocket(connectionId: string): Promise<void> {
     const { creds, keys, persist } = await this.loadAuth(connectionId);

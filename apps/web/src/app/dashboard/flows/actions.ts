@@ -62,6 +62,48 @@ export async function saveFlowAction(
   return { activated: activeElsewhere === 0 };
 }
 
+export async function renameFlowAction(formData: FormData): Promise<void> {
+  const org = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const flow = await ownFlow(org, id);
+  if (!name || name === flow.name) return;
+  await prisma.flow.update({ where: { id: flow.id }, data: { name } });
+  // `Contact.source` is a denormalized copy of this name — keep leads' source
+  // labels in sync so the CRM doesn't show a name that no longer exists.
+  await prisma.contact.updateMany({
+    where: { organizationId: org, sourceFlowId: flow.id },
+    data: { source: name },
+  });
+  revalidatePath("/dashboard/flows");
+  revalidatePath(`/dashboard/flows/${id}/edit`);
+  revalidatePath("/dashboard/leads");
+}
+
+/**
+ * Permanently delete a flow. Leads keep their collected fields and their
+ * `source` name; only the live link (`sourceFlowId`) is cleared so filters and
+ * schema lookups don't point at a row that no longer exists.
+ */
+export async function deleteFlowAction(formData: FormData): Promise<void> {
+  const org = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const flow = await ownFlow(org, id);
+  await prisma.$transaction([
+    prisma.contact.updateMany({
+      where: { organizationId: org, sourceFlowId: flow.id },
+      data: { sourceFlowId: null },
+    }),
+    prisma.conversation.updateMany({
+      where: { organizationId: org, flowId: flow.id },
+      data: { flowId: null },
+    }),
+    prisma.flow.delete({ where: { id: flow.id } }),
+  ]);
+  revalidatePath("/dashboard/flows");
+  revalidatePath("/dashboard/leads");
+}
+
 export async function toggleFlowActiveAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
   const id = String(formData.get("id") ?? "");

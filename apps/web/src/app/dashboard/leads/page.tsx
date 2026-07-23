@@ -20,6 +20,7 @@ import {
 } from "@/lib/leads";
 import { bulkAction } from "./actions";
 import { BulkBar } from "./BulkBar";
+import { RowLink } from "./RowLink";
 
 export const dynamic = "force-dynamic";
 
@@ -316,7 +317,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 </thead>
                 <tbody>
                   {contacts.map((c) => (
-                    <tr key={c.id} className="border-b border-line/60 last:border-0 hover:bg-slate-50">
+                    <RowLink
+                      as="tr"
+                      key={c.id}
+                      href={`/dashboard/leads/${c.id}`}
+                      className="border-b border-line/60 last:border-0 hover:bg-slate-50"
+                    >
                       <td className="p-3">
                         <input
                           type="checkbox"
@@ -357,7 +363,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                       </td>
                       <td className="max-w-xs truncate p-3 text-slate-400">{answersSummary(c.fields)}</td>
                       <td className="whitespace-nowrap p-3 text-slate-400">{fmtDate(c.createdAt)}</td>
-                    </tr>
+                    </RowLink>
                   ))}
                 </tbody>
               </table>
@@ -369,7 +375,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               matter most (status, owner). */}
           <div className="grid gap-3 md:hidden">
             {contacts.map((c) => (
-              <div key={c.id} className="card p-4">
+              <RowLink as="div" key={c.id} href={`/dashboard/leads/${c.id}`} className="card p-4">
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
@@ -400,7 +406,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                     <div className="mt-2 text-xs text-slate-400">{fmtDate(c.createdAt)}</div>
                   </div>
                 </div>
-              </div>
+              </RowLink>
             ))}
           </div>
         </form>

@@ -31,8 +31,23 @@ model Organization {
   invites       Invite[]
   leadNotes     LeadNote[]
   activities    LeadActivity[]
+  broadcasts    Broadcast[]
+  subscription  Subscription?
+  payments      Payment[]
   onboardedAt   DateTime?
   calcomLink    String?
+
+  /**
+   * Automatic follow-up nudges for leads that went quiet. Off by default —
+   * unsolicited re-engagement is a tenant decision, not platform behavior.
+   */
+  followUpEnabled    Boolean @default(false)
+  /** How long a lead must be silent before the first/next nudge. */
+  followUpAfterHours Int     @default(48)
+  /** Hard cap of nudges per lead — after that a human takes over or the lead is lost. */
+  followUpMax        Int     @default(2)
+  /** Message template; `{name}` is replaced with the lead's name when known. */
+  followUpMessage    String?
 }
 
 // Encrypted per-tenant secrets (e.g. Grow payment API keys). Values are stored
@@ -108,6 +123,104 @@ enum Plan {
   FREE
   STARTER
   PRO
+}
+
+// ---------- Billing / subscriptions ----------
+
+/**
+ * A tenant's paid subscription. At most one per organization (the current one).
+ * `Organization.plan` stays as the denormalized quick-read; this table is the
+ * source of truth for billing period, renewal, and cancel state. Recurring
+ * charges are driven by Grow's managed recurring payment page — each successful
+ * charge fires our webhook, which extends `currentPeriodEnd` and records a Payment.
+ */
+model Subscription {
+  id             String             @id @default(cuid())
+  organizationId String             @unique
+  plan           Plan
+  status         SubscriptionStatus @default(PENDING)
+  interval       BillingInterval    @default(MONTHLY)
+  /** Charge amount per period, ILS, VAT-included. */
+  priceIls       Int
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  /** When true the subscription lapses to FREE at period end instead of renewing. */
+  cancelAtPeriodEnd  Boolean         @default(false)
+  canceledAt         DateTime?
+  /** Grow process/token identifiers for reconciliation (no card data stored here). */
+  growProcessId  String?
+  growAsmachta   String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  payments     Payment[]
+
+  @@index([status, currentPeriodEnd])
+}
+
+enum SubscriptionStatus {
+  PENDING // created, awaiting first successful charge
+  TRIALING
+  ACTIVE
+  PAST_DUE // a recurring charge failed; in dunning
+  CANCELED
+}
+
+enum BillingInterval {
+  MONTHLY
+  ANNUAL
+}
+
+/**
+ * One Grow charge (first payment or a recurring renewal). This is the revenue
+ * ledger and receipt history. Deduped by `growTransactionId` so a replayed
+ * webhook cannot double-count.
+ */
+model Payment {
+  id             String        @id @default(cuid())
+  organizationId String
+  subscriptionId String?
+  /** Charged amount, ILS, VAT-included. */
+  amountIls      Int
+  status         PaymentStatus @default(PENDING)
+  /** Grow transaction id — unique per real charge; the idempotency key. */
+  growTransactionId String?    @unique
+  growAsmachta      String?
+  cardSuffix        String?
+  cardBrand         String?
+  /** Grow-issued invoice/receipt URL, when available. */
+  invoiceUrl        String?
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+/**
+ * Idempotency + audit log of raw provider callbacks. The webhook records the
+ * event by its external id BEFORE acting; a duplicate delivery is a no-op.
+ */
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  provider   String   @default("grow")
+  /** Provider's unique id for this delivery (Grow transactionId/asmachta). */
+  externalId String
+  payload    Json
+  processedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([provider, externalId])
 }
 
 // ---------- WhatsApp ----------
@@ -200,6 +313,13 @@ model Contact {
   callSummaryById String?
   /** Last inbound/outbound WhatsApp activity — drives "stale lead" surfacing. */
   lastContactedAt DateTime?
+  /**
+   * Automatic follow-up bookkeeping. Deliberately separate from
+   * `lastContactedAt`: a bot nudge is not "contact", and counting it as such
+   * would push the lead out of the stale filter it was selected from.
+   */
+  followUpCount   Int       @default(0)
+  lastFollowUpAt  DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -277,7 +397,9 @@ enum ActivityKind {
   SUMMARY_SAVED
   TAGS_CHANGED
   APPOINTMENT_BOOKED
+  APPOINTMENT_CANCELLED
   CONVERSATION_COMPLETED
+  FOLLOW_UP_SENT
 }
 
 // ---------- Conversations (flow-run state) ----------
@@ -326,6 +448,67 @@ enum Direction {
   OUT
 }
 
+// ---------- Broadcasts (initiated / scheduled outbound) ----------
+
+/**
+ * A one-off outbound campaign: one message template sent to a list of
+ * recipients, immediately or at a scheduled time. Unlike conversations —
+ * which a lead always initiates — a broadcast is BUSINESS-initiated.
+ */
+model Broadcast {
+  id             String          @id @default(cuid())
+  organizationId String
+  name           String
+  /** Message template; `{name}` is replaced per recipient. */
+  message        String
+  /** Connection to send from; null = the org's first CONNECTED at send time. */
+  connectionId   String?
+  /** Null = send as soon as the sweep picks it up. */
+  scheduledAt    DateTime?
+  status         BroadcastStatus @default(SCHEDULED)
+  totalCount     Int             @default(0)
+  sentCount      Int             @default(0)
+  failedCount    Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipients   BroadcastRecipient[]
+
+  @@index([organizationId])
+  @@index([status, scheduledAt])
+}
+
+model BroadcastRecipient {
+  id          String          @id @default(cuid())
+  broadcastId String
+  phone       String
+  name        String?
+  /** Linked CRM lead when the phone matched (or was created by the import). */
+  contactId   String?
+  status      RecipientStatus @default(PENDING)
+  error       String?
+  sentAt      DateTime?
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([broadcastId, status])
+}
+
+enum BroadcastStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 // ---------- Scheduling ----------
 model AvailabilityRule {
   id             String  @id @default(cuid())
@@ -352,6 +535,8 @@ model Appointment {
   endsAt         DateTime
   status         ApptStatus @default(BOOKED)
   googleEventId  String?
+  /** Cal.com booking uid — lets cancel/reschedule webhooks find the row. */
+  calcomUid      String?    @unique
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

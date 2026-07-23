@@ -52,6 +52,28 @@ app.register(async (instance) => {
     return manager.getState(req.params.id);
   });
 
+  instance.post<{
+    Params: { id: string };
+    Body: { subject: string; phones: string[]; welcome?: string };
+  }>("/connections/:id/group", async (req, reply) => {
+    const { subject, phones, welcome } = req.body ?? {};
+    if (!subject || !Array.isArray(phones) || phones.length === 0) {
+      return reply.code(400).send({ error: "subject and phones required" });
+    }
+    try {
+      const result = await manager.createGroup(req.params.id, subject, phones);
+      // Optional first message into the fresh group.
+      if (welcome) {
+        await manager
+          .send(req.params.id, result.groupJid, welcome, result.groupJid)
+          .catch((err) => log.warn({ err: (err as Error).message }, "group welcome failed"));
+      }
+      return { ok: true, ...result };
+    } catch (err) {
+      return reply.code(500).send({ error: (err as Error).message });
+    }
+  });
+
   instance.post<{ Params: { id: string }; Body: { to: string; text: string } }>(
     "/connections/:id/send",
     async (req, reply) => {

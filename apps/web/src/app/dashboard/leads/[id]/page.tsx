@@ -37,7 +37,9 @@ const ACTIVITY_ICON: Record<ActivityKind, string> = {
   SUMMARY_SAVED: "📞",
   TAGS_CHANGED: "🔖",
   APPOINTMENT_BOOKED: "📅",
+  APPOINTMENT_CANCELLED: "🚫",
   CONVERSATION_COMPLETED: "🤖",
+  FOLLOW_UP_SENT: "🔥",
 };
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {

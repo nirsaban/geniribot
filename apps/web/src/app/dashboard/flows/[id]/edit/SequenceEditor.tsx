@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { he } from "@/lib/he";
 import { saveFlowAction } from "../../actions";
 
-type StepKind = "message" | "question" | "book" | "assign" | "notify" | "tag";
+type StepKind = "message" | "question" | "book" | "assign" | "notify" | "tag" | "delay";
 interface Step {
   id: string;
   kind: StepKind;
@@ -18,6 +18,8 @@ interface Step {
   assignTo?: string;
   /** tag: the tag to add. */
   tag?: string;
+  /** delay: how long to wait before continuing. */
+  delayMinutes?: number;
 }
 
 export interface Member {
@@ -53,6 +55,7 @@ const KIND: Record<StepKind, { icon: string; label: string; color: string }> = {
   assign: { icon: "🧑‍💼", label: he.stepAssignLabel, color: "#7c3aed" },
   notify: { icon: "🔔", label: he.stepNotifyLabel, color: "#db2777" },
   tag: { icon: "🔖", label: he.stepTagLabel, color: "#0891b2" },
+  delay: { icon: "⏳", label: he.nodeKindDelay, color: "#64748b" },
 };
 
 const KIND_DESC: Record<StepKind, string> = {
@@ -62,7 +65,15 @@ const KIND_DESC: Record<StepKind, string> = {
   assign: he.stepAssignDesc,
   notify: he.stepNotifyDesc,
   tag: he.stepTagDesc,
+  delay: he.nodeDescDelay,
 };
+
+/** Human summary of a delay length, biggest sensible unit first. */
+function delayLabel(minutes: number): string {
+  if (minutes % 1440 === 0) return `${minutes / 1440} ${he.delayUnitDays}`;
+  if (minutes % 60 === 0) return `${minutes / 60} ${he.delayUnitHours}`;
+  return `${minutes} ${he.delayUnitMinutes}`;
+}
 
 let counter = 0;
 const newId = () => `n_${Date.now().toString(36)}_${counter++}`;
@@ -77,6 +88,8 @@ function defToSteps(def: Def): Step[] {
     seen.add(cur);
     const n: Record<string, unknown> = nodes[cur]!;
     if (n.type === "message") steps.push({ id: cur, kind: "message", text: n.text as string });
+    else if (n.type === "delay")
+      steps.push({ id: cur, kind: "delay", delayMinutes: (n.minutes as number) ?? 60 });
     else if (n.type === "question")
       steps.push({ id: cur, kind: "question", prompt: n.prompt as string, field: n.field as string, expect: (n.expect as string) ?? "text", choices: n.choices as string[] });
     else if (n.type === "action") {
@@ -119,6 +132,8 @@ function stepsToDef(steps: Step[], trigger: Trigger): Def {
     else if (s.kind === "notify") nodes[s.id] = { type: "action", action: "notify_agent", next };
     else if (s.kind === "tag")
       nodes[s.id] = { type: "action", action: "add_tag", params: { tag: s.tag ?? "" }, next };
+    else if (s.kind === "delay")
+      nodes[s.id] = { type: "delay", minutes: Math.max(1, s.delayMinutes ?? 60), next };
     else nodes[s.id] = { type: "action", action: "book_appointment", next };
   });
   return { start: steps[0]?.id ?? "n1", nodes, trigger };
@@ -162,7 +177,9 @@ export function SequenceEditor({
             ? { id: newId(), kind, assignTo: "" }
             : kind === "tag"
               ? { id: newId(), kind, tag: "" }
-              : { id: newId(), kind };
+              : kind === "delay"
+                ? { id: newId(), kind, delayMinutes: 60 }
+                : { id: newId(), kind };
     setSteps((s) => {
       if (at === undefined) return [...s, base];
       const copy = [...s];
@@ -304,6 +321,12 @@ export function SequenceEditor({
                     />
                   </div>
                 )}
+                {s.kind === "delay" && (
+                  <DelayFields
+                    minutes={s.delayMinutes ?? 60}
+                    onChange={(m) => patch(s.id, { delayMinutes: m })}
+                  />
+                )}
               </div>
             </div>
 
@@ -328,6 +351,40 @@ export function SequenceEditor({
   );
 }
 
+/**
+ * Delay editor: a number + unit pair persisted as plain minutes. The unit is
+ * derived from divisibility so "1440" re-opens as "1 day", not a wall of
+ * minutes.
+ */
+function DelayFields({ minutes, onChange }: { minutes: number; onChange: (m: number) => void }) {
+  const unit = minutes % 1440 === 0 ? 1440 : minutes % 60 === 0 ? 60 : 1;
+  const amount = Math.max(1, Math.round(minutes / unit));
+  return (
+    <div>
+      <div className="label">{he.delayAmountLabel}</div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          value={amount}
+          onChange={(e) => onChange(Math.max(1, Number(e.target.value) || 1) * unit)}
+          className="input !w-24"
+        />
+        <select
+          value={unit}
+          onChange={(e) => onChange(amount * Number(e.target.value))}
+          className="input !w-auto"
+        >
+          <option value={1}>{he.delayUnitMinutes}</option>
+          <option value={60}>{he.delayUnitHours}</option>
+          <option value={1440}>{he.delayUnitDays}</option>
+        </select>
+      </div>
+      <p className="mt-1 text-xs text-slate-400">{he.placeholdersHint}</p>
+    </div>
+  );
+}
+
 function AddBar({ onAdd }: { onAdd: (k: StepKind) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -338,7 +395,7 @@ function AddBar({ onAdd }: { onAdd: (k: StepKind) => void }) {
         </button>
       ) : (
         <div className="z-10 flex flex-wrap justify-center gap-2 rounded-xl border border-line bg-white p-2 shadow-card">
-          {(["message", "question", "book", "assign", "notify", "tag"] as StepKind[]).map((k) => (
+          {(["message", "question", "book", "delay", "assign", "notify", "tag"] as StepKind[]).map((k) => (
             <button key={k} onClick={() => { onAdd(k); setOpen(false); }} className="w-40 rounded-lg border border-line p-2 text-right text-xs hover:bg-slate-50">
               <div className="font-semibold text-ink">{KIND[k].icon} {KIND[k].label}</div>
               <div className="mt-0.5 text-[10px] leading-tight text-slate-400">{KIND_DESC[k]}</div>
@@ -378,6 +435,13 @@ function Preview({ steps }: { steps: Step[] }) {
               <Bubble side="bot">
                 בחר/י מועד לשיחה:{"\n"}1. יום ראשון 09:00{"\n"}2. יום ראשון 09:30 …
               </Bubble>
+            )}
+            {s.kind === "delay" && (
+              <div className="flex justify-center">
+                <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] text-slate-500">
+                  ⏳ {he.delayStepSummary} {delayLabel(s.delayMinutes ?? 60)}
+                </span>
+              </div>
             )}
             {/* Internal steps produce no message — say so, rather than leaving a
                 silent gap the builder reads as "nothing happens here". */}

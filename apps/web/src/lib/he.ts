@@ -173,10 +173,95 @@ export const he = {
   disconnectGoogle: "נתק יומן",
   googleConnected: "יומן Google מחובר ✅",
   googleNotConfigured: "אינטגרציית Google לא הוגדרה בשרת (חסר GOOGLE_CLIENT_ID/SECRET).",
+  googleSetupHint:
+    "כדי להפעיל: צרו OAuth Client ב-Google Cloud Console (APIs & Services → Credentials → Create OAuth client ID → Web application), הוסיפו את כתובת ה-Redirect למטה, והזינו את ה-Client ID וה-Secret בקובץ ‎.env‎ בשרת (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET). כל בעל עסק מחבר את היומן שלו מכאן.",
+  googlePerUserHint: "כל משתמש מחבר את היומן האישי שלו — פגישות של ליד ייכנסו ליומן של האחראי עליו.",
   googleConnectedMsg: "היומן חובר בהצלחה!",
   googleErrorMsg: "החיבור נכשל, נסה/י שוב.",
   remindersTitle: "תזכורות",
   remindersDesc: "לפני כל פגישה נשלחות ללקוח תזכורות אוטומטיות בוואטסאפ (24 שעות ושעה לפני).",
+
+  // automatic follow-ups
+  followUpsTitle: "פולו-אפ אוטומטי ללידים קרים",
+  followUpsDesc: "הבוט ישלח תזכורת בוואטסאפ לליד שהפסיק לענות — כדי שאף ליד לא ילך לאיבוד.",
+  followUpEnabledLabel: "הפעל פולו-אפ אוטומטי",
+  followUpAfterHoursLabel: "אחרי כמה שעות שקט לשלוח",
+  followUpMaxLabel: "מקסימום פולו-אפים לליד",
+  followUpMessageLabel: "נוסח ההודעה",
+  followUpMessageHint: "אפשר להשתמש ב-{name} כדי לשלב את שם הליד.",
+  followUpDefaultMessage: "היי{name}, ראיתי שלא סיימנו את השיחה 🙂 אשמח לעזור אם עדיין רלוונטי!",
+  followUpsSaved: "הגדרות הפולו-אפ נשמרו ✅",
+
+  // broadcasts (רשימות תפוצה מתוזמנות)
+  broadcasts: "רשימות תפוצה",
+  broadcastsTitle: "רשימות תפוצה מתוזמנות",
+  broadcastsSubtitle: "שליחת הודעה יזומה לרשימת אנשי קשר — מיד או במועד מתוזמן",
+  newBroadcast: "רשימת תפוצה חדשה",
+  noBroadcasts: "אין רשימות תפוצה עדיין",
+  broadcastName: "שם הקמפיין",
+  broadcastMessage: "נוסח ההודעה",
+  broadcastMessageHint: "אפשר להשתמש ב-{name} כדי לשלב את שם הנמען.",
+  broadcastWhen: "מתי לשלוח",
+  broadcastNow: "שליחה מיידית",
+  broadcastAt: "במועד מתוזמן",
+  broadcastAudience: "נמענים",
+  broadcastAudienceLeads: "לידים מהמערכת",
+  broadcastAudienceLeadsAll: "כל הלידים",
+  broadcastAudienceManual: "מספרים ידניים (מופרדים בפסיק או שורה)",
+  broadcastAudienceCsv: "ייבוא מקובץ CSV",
+  broadcastCsvHint: "עמודה ראשונה: טלפון. עמודה שנייה (אופציונלי): שם. שורת כותרת מזוהה אוטומטית.",
+  broadcastCreate: "יצירת רשימת תפוצה",
+  broadcastCancel: "ביטול שליחה",
+  broadcastRecipients: "נמענים",
+  broadcastNoRecipients: "לא נבחרו נמענים — הוסיפו לידים, מספרים או קובץ CSV.",
+  broadcastStatus: {
+    DRAFT: "טיוטה",
+    SCHEDULED: "מתוזמן",
+    SENDING: "בשליחה",
+    SENT: "נשלח",
+    CANCELLED: "בוטל",
+  },
+  recipientStatus: {
+    PENDING: "ממתין",
+    SENT: "נשלח",
+    FAILED: "נכשל",
+  },
+  broadcastSafetyNote:
+    "ההודעות נשלחות בהדרגה (כ-3 שניות בין הודעה להודעה) כדי להגן על המספר שלכם מחסימה. שליחה המונית למספרים שלא הסכימו לקבל הודעות עלולה לגרום לחסימת המספר על ידי וואטסאפ.",
+  broadcastWaitingForConnection: "ממתין לחיבור וואטסאפ פעיל",
+
+  // whatsapp groups
+  groups: "קבוצות וואטסאפ",
+  groupsTitle: "יצירת קבוצת וואטסאפ",
+  groupsSubtitle: "יצירת קבוצה חדשה וצירוף לידים או רשימת מספרים אליה",
+  groupSubject: "שם הקבוצה",
+  groupWelcome: "הודעת פתיחה (אופציונלי)",
+  groupCreate: "צור קבוצה",
+  groupCreated: "הקבוצה נוצרה ✅",
+  groupAddedCount: "צורפו",
+  groupFailedCount: "לא צורפו (הגבלת פרטיות)",
+  groupNeedsConnection: "נדרש חיבור וואטסאפ פעיל (Baileys/QR) כדי ליצור קבוצה.",
+  groupNotSupportedCloud: "יצירת קבוצות נתמכת רק בחיבור QR, לא בחיבור Cloud API.",
+
+  // flow builder — delay step
+  nodeKindDelay: "המתנה",
+  nodeDescDelay: "ממתין פרק זמן ואז ממשיך (למשל לתזכורת המשך)",
+  delayAmountLabel: "כמה זמן להמתין",
+  delayUnitMinutes: "דקות",
+  delayUnitHours: "שעות",
+  delayUnitDays: "ימים",
+  delayStepSummary: "ממתין",
+  placeholdersHint: "טיפ: אפשר לשלב תשובות קודמות בהודעות עם {שם-שדה}, למשל {name}.",
+
+  // cal.com webhook
+  calcomWebhookTitle: "עדכון אוטומטי מ-Cal.com",
+  calcomWebhookDesc:
+    "כשלקוח קובע פגישה בקישור ה-Cal.com שלכם, הליד יעודכן אוטומטית לסטטוס \"נקבעה פגישה\" והפגישה תופיע במערכת. הגדירו Webhook בחשבון Cal.com → Settings → Developer → Webhooks:",
+  calcomWebhookUrlLabel: "כתובת ה-Webhook (Subscriber URL)",
+  calcomWebhookSecretLabel: "Secret (אותו ערך גם ב-Cal.com וגם כאן)",
+  calcomWebhookSecretPlaceholder: "מחרוזת סודית שתמציאו",
+  calcomWebhookSaved: "הגדרות ה-Webhook נשמרו ✅",
+  calcomWebhookEvents: "אירועים לסימון ב-Cal.com: Booking Created, Booking Cancelled, Booking Rescheduled",
 
   // billing / plans
   billing: "מנוי ותשלום",
@@ -274,6 +359,12 @@ export const he = {
   activate: "הפעל",
   deactivate: "כבה",
   backToFlows: "→ חזרה לתסריטים",
+  renameFlow: "שינוי שם",
+  flowNameLabel: "שם התסריט",
+  saveName: "שמירה",
+  cancel: "ביטול",
+  deleteFlow: "מחיקה",
+  deleteFlowConfirm: "למחוק את התסריט לצמיתות? לא ניתן לשחזר אותו.",
 
   // flow builder — trigger
   triggerTitle: "מתי הבוט מתחיל? (טריגר)",
@@ -477,7 +568,9 @@ export const he = {
     SUMMARY_SAVED: "נשמר סיכום שיחה",
     TAGS_CHANGED: "עודכנו תגיות",
     APPOINTMENT_BOOKED: "נקבעה פגישה",
+    APPOINTMENT_CANCELLED: "הפגישה בוטלה",
     CONVERSATION_COMPLETED: "השיחה עם הבוט הסתיימה",
+    FOLLOW_UP_SENT: "נשלח פולו-אפ אוטומטי",
   },
 
   // team / users

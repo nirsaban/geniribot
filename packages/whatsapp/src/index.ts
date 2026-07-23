@@ -106,6 +106,17 @@ export interface WhatsAppProvider {
   logout(connectionId: string): Promise<void>;
   send(msg: OutboundMessage): Promise<void>;
   status(connectionId: string): ConnectionStatus;
+  /**
+   * Create a WhatsApp group with the given members. Baileys-only for now —
+   * the Cloud API has no group-management endpoints, hence optional.
+   * Returns the group JID (…@g.us) and which members actually joined
+   * (numbers with strict privacy settings may only receive an invite).
+   */
+  createGroup?(
+    connectionId: string,
+    subject: string,
+    phones: string[],
+  ): Promise<{ groupJid: string; added: string[]; failed: string[] }>;
 }
 
 export * from "./mock-provider.js";

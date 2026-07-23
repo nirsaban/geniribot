@@ -50,3 +50,16 @@ export interface ReminderJob {
 export const remindersQueue = new Queue<ReminderJob>(REMINDERS_QUEUE, {
   connection: bullConnection,
 });
+
+export const DELAYS_QUEUE = "wa-delays";
+
+/** A flow `delay` node's timer: resume the conversation when it fires. */
+export interface DelayJob {
+  conversationId: string;
+  /** Guard: only resume if the conversation is still paused toward this node. */
+  resumeNodeId: string | null;
+}
+
+export const delaysQueue = new Queue<DelayJob>(DELAYS_QUEUE, {
+  connection: bullConnection,
+});

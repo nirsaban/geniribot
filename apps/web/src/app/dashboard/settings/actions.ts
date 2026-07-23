@@ -22,6 +22,36 @@ export async function disconnectGoogleAction(): Promise<void> {
   revalidatePath("/dashboard/settings");
 }
 
+/** Save the org's automatic cold-lead follow-up policy. */
+export async function saveFollowUpAction(formData: FormData): Promise<void> {
+  const org = await requireOrg();
+  const enabled = formData.get("enabled") === "1";
+  // Clamp instead of reject: a bad hand-typed number should degrade to a sane
+  // policy, not silently disable follow-ups.
+  const afterHours = Math.min(24 * 14, Math.max(1, Number(formData.get("afterHours")) || 48));
+  const max = Math.min(5, Math.max(1, Number(formData.get("max")) || 2));
+  const message = String(formData.get("message") ?? "").trim();
+  await prisma.organization.update({
+    where: { id: org },
+    data: {
+      followUpEnabled: enabled,
+      followUpAfterHours: afterHours,
+      followUpMax: max,
+      followUpMessage: message || null,
+    },
+  });
+  revalidatePath("/dashboard/settings");
+}
+
+/** Save (or clear) the Cal.com webhook signing secret. */
+export async function saveCalcomWebhookSecretAction(formData: FormData): Promise<void> {
+  const org = await requireOrg();
+  const value = String(formData.get("secret") ?? "").trim();
+  if (value) await setSecret(org, "calcom_webhook_secret", value);
+  else await deleteSecret(org, "calcom_webhook_secret");
+  revalidatePath("/dashboard/settings");
+}
+
 /** Save pasted Grow secrets (encrypted). Only non-empty fields are updated. */
 export async function saveGrowSecretsAction(formData: FormData): Promise<void> {
   const org = await requireOrg();

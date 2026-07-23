@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PLANS, type PlanId } from "@kesher/billing";
+import { PLANS, planPrice, type BillingInterval, type PlanId } from "@kesher/billing";
 import { withBase } from "@/lib/basePath";
 import { growPlatformProvider } from "@/lib/billing";
 import { getSession } from "@/lib/session";
@@ -11,10 +11,15 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.sa) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const { orgId, plan } = (await req.json()) as { orgId?: string; plan?: PlanId };
+  const { orgId, plan, interval: rawInterval } = (await req.json()) as {
+    orgId?: string;
+    plan?: PlanId;
+    interval?: string;
+  };
   if (!orgId || !plan || !(plan in PLANS)) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
+  const interval: BillingInterval = rawInterval === "ANNUAL" ? "ANNUAL" : "MONTHLY";
 
   const provider = await growPlatformProvider();
   if (!provider) return NextResponse.json({ error: "not_configured" }, { status: 400 });
@@ -23,9 +28,11 @@ export async function POST(req: Request) {
   try {
     const { url } = await provider.createCheckout({
       plan,
-      sumIls: PLANS[plan].priceIls,
+      interval,
+      sumIls: planPrice(plan, interval),
       description: `GeniriBot — מסלול ${PLANS[plan].name}`,
       organizationId: orgId,
+      notifyUrl: `${base}${withBase("/api/billing/grow/webhook")}`,
       successUrl: `${base}${withBase("/dashboard/billing?paid=1")}`,
       cancelUrl: `${base}${withBase("/dashboard/billing?cancelled=1")}`,
     });

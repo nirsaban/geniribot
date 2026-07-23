@@ -1,12 +1,18 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
 import { Card, PageHeader } from "@/components/ui";
 import { withBase } from "@/lib/basePath";
 import { googleConfigured } from "@/lib/google";
 import { he } from "@/lib/he";
+import { secretMask } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
 import { saveCalcomLinkAction } from "../onboarding/actions";
-import { disconnectGoogleAction } from "./actions";
+import {
+  disconnectGoogleAction,
+  saveCalcomWebhookSecretAction,
+  saveFollowUpAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +30,23 @@ export default async function SettingsPage({
   });
   const org = await prisma.organization.findUnique({
     where: { id: session.org },
-    select: { calcomLink: true },
+    select: {
+      calcomLink: true,
+      followUpEnabled: true,
+      followUpAfterHours: true,
+      followUpMax: true,
+      followUpMessage: true,
+    },
   });
   const configured = googleConfigured();
+
+  const calcomSecretMask = await secretMask(session.org, "calcom_webhook_secret");
+  // The public webhook URL for this tenant — built from the request's own host
+  // so it is correct on any deployment without extra config.
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost";
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const calcomWebhookUrl = `${proto}://${host}${withBase(`/api/webhooks/calcom/${session.org}`)}`;
 
   return (
     <>
@@ -65,6 +85,15 @@ export default async function SettingsPage({
           {configured && integration && (
             <div className="mt-3 badge-green">{he.googleConnected}</div>
           )}
+          {configured && <p className="mt-3 text-xs text-slate-400">{he.googlePerUserHint}</p>}
+          {!configured && (
+            <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+              {he.googleSetupHint}
+              <code dir="ltr" className="mt-2 block select-all break-all rounded-lg bg-white/70 p-2 text-left">
+                https://wabot.miltech.cloud/api/integrations/google/callback
+              </code>
+            </div>
+          )}
         </Card>
 
         <Card>
@@ -73,6 +102,95 @@ export default async function SettingsPage({
           <form action={saveCalcomLinkAction} className="flex flex-wrap gap-2">
             <input name="calcom" defaultValue={org?.calcomLink ?? ""} dir="ltr" placeholder={he.calcomLinkPlaceholder} className="input min-w-0 flex-1 text-left" />
             <button className="btn-primary shrink-0">{he.saveSecret}</button>
+          </form>
+        </Card>
+
+        <Card>
+          <h2 className="flex items-center gap-2 font-semibold text-ink">📅 {he.calcomWebhookTitle}</h2>
+          <p className="mb-3 mt-1 text-sm text-slate-500">{he.calcomWebhookDesc}</p>
+          <div className="mb-3">
+            <label className="label">{he.calcomWebhookUrlLabel}</label>
+            <code dir="ltr" className="block select-all break-all rounded-lg bg-slate-100 p-2 text-left text-xs text-slate-700">
+              {calcomWebhookUrl}
+            </code>
+            <p className="mt-1 text-xs text-slate-400">{he.calcomWebhookEvents}</p>
+          </div>
+          <form action={saveCalcomWebhookSecretAction} className="flex flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <label className="label" htmlFor="calcom-secret">
+                {he.calcomWebhookSecretLabel}
+              </label>
+              <input
+                id="calcom-secret"
+                name="secret"
+                dir="ltr"
+                placeholder={calcomSecretMask ?? he.calcomWebhookSecretPlaceholder}
+                className="input w-full text-left"
+              />
+            </div>
+            <button className="btn-primary shrink-0">{he.saveSecret}</button>
+          </form>
+        </Card>
+
+        <Card>
+          <h2 className="flex items-center gap-2 font-semibold text-ink">🔥 {he.followUpsTitle}</h2>
+          <p className="mb-3 mt-1 text-sm text-slate-500">{he.followUpsDesc}</p>
+          <form action={saveFollowUpAction} className="space-y-3">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                name="enabled"
+                value="1"
+                defaultChecked={org?.followUpEnabled ?? false}
+                className="h-4 w-4 rounded border-line accent-brand"
+              />
+              {he.followUpEnabledLabel}
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor="fu-hours">
+                  {he.followUpAfterHoursLabel}
+                </label>
+                <input
+                  id="fu-hours"
+                  name="afterHours"
+                  type="number"
+                  min={1}
+                  max={336}
+                  defaultValue={org?.followUpAfterHours ?? 48}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="fu-max">
+                  {he.followUpMaxLabel}
+                </label>
+                <input
+                  id="fu-max"
+                  name="max"
+                  type="number"
+                  min={1}
+                  max={5}
+                  defaultValue={org?.followUpMax ?? 2}
+                  className="input"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="fu-message">
+                {he.followUpMessageLabel}
+              </label>
+              <textarea
+                id="fu-message"
+                name="message"
+                rows={2}
+                defaultValue={org?.followUpMessage ?? ""}
+                placeholder={he.followUpDefaultMessage}
+                className="input w-full"
+              />
+              <p className="mt-1 text-xs text-slate-400">{he.followUpMessageHint}</p>
+            </div>
+            <button className="btn-primary">{he.saveSecret}</button>
           </form>
         </Card>
 

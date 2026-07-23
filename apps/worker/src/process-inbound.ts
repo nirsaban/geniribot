@@ -4,6 +4,7 @@ import {
   FlowDefinition,
   matchesTrigger,
   resumeBooking,
+  resumeDelay,
   start,
   step,
   triggerSpecificity,
@@ -15,9 +16,11 @@ import { addTag, assignOwner, notifyAgent } from "./agent-routing.js";
 import { orgCalendar } from "./calendar.js";
 import { formatSlot, offerSlots, slotMenu } from "./booking.js";
 import {
+  delaysQueue,
   OUTBOUND_JOB,
   outboundQueue,
   remindersQueue,
+  type DelayJob,
   type InboundJob,
 } from "./queues.js";
 
@@ -423,6 +426,15 @@ async function applyAndPersist(flow: FlowDefinition, result: StepResult, ctx: Ct
         for (const a of resumed.actions) if (a.kind === "send_message") await sendOut(a.text, ctx);
         finalState = resumed.state;
       }
+    } else if (action.kind === "schedule_delay") {
+      // The engine already put the conversation into awaiting:"delay"; here we
+      // just arm the timer. The resume handler re-checks the state, so a lead
+      // who replies first simply outruns the job.
+      await delaysQueue.add(
+        "resume",
+        { conversationId: ctx.conversationId, resumeNodeId: action.resumeNodeId },
+        { delay: action.minutes * 60_000 },
+      );
     } else if (action.kind === "add_tag") {
       await addTag(ctx.organizationId, ctx.contactId, action.tag);
     } else if (action.kind === "assign_owner") {
@@ -505,6 +517,12 @@ async function handleBookingReply(
 }
 
 async function sendOut(text: string, ctx: Ctx): Promise<void> {
+  // Contact-level placeholder: `{name}` that no collected answer filled (the
+  // engine already substituted answer fields). Falls back to nothing, tidied.
+  text = text
+    .replace(/\{name\}/g, ctx.contactName ?? "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ ([,!?.])/g, "$1");
   await prisma.message.create({
     data: { conversationId: ctx.conversationId, direction: "OUT", body: text },
   });
@@ -543,7 +561,9 @@ async function persist(
       ? "HANDOFF"
       : state.status === "completed" || state.currentNodeId === null
         ? "COMPLETED"
-        : awaitingInput
+        : // A timed delay is a live conversation waiting on the clock, not on
+          // the lead — awaitingInput is false but it is anything but finished.
+          awaitingInput || state.awaiting === "delay"
           ? "ACTIVE"
           : "COMPLETED";
   await prisma.conversation.update({
@@ -569,6 +589,44 @@ async function persist(
   }
 }
 
+/**
+ * A flow delay's timer fired: continue the conversation from where it paused.
+ * No-op when the conversation moved on (lead replied during the wait, flow
+ * changed, or the row is gone) — the state check is the idempotency guard.
+ */
+export async function processDelay(job: DelayJob): Promise<void> {
+  const convo = await prisma.conversation.findUnique({
+    where: { id: job.conversationId },
+    include: { contact: true },
+  });
+  if (!convo || convo.status !== "ACTIVE" || !convo.flowId) return;
+
+  const state = normalizeState((convo.state ?? {}) as Partial<FlowState>);
+  if (state.awaiting !== "delay" || (state.resumeNodeId ?? null) !== job.resumeNodeId) {
+    return; // stale timer — the conversation already moved
+  }
+
+  const flowRow = await prisma.flow.findUnique({ where: { id: convo.flowId } });
+  if (!flowRow) return;
+  const parsed = FlowDefinition.safeParse(flowRow.definition);
+  if (!parsed.success) return;
+
+  const ctx: Ctx = {
+    organizationId: convo.organizationId,
+    connectionId: convo.connectionId,
+    to: convo.contact.phone,
+    toJid: convo.contact.waJid ?? undefined,
+    contactId: convo.contactId,
+    ownerUserId: convo.contact.ownerUserId,
+    conversationId: convo.id,
+    contactFields: (convo.contact.fields as Record<string, unknown>) ?? {},
+    contactName: convo.contact.name,
+  };
+  const result = resumeDelay(parsed.data, state);
+  await applyAndPersist(parsed.data, result, ctx);
+  log.info({ conversationId: convo.id }, "delay elapsed — conversation resumed");
+}
+
 function normalizeState(s: Partial<FlowState>): FlowState {
   return {
     currentNodeId: s.currentNodeId ?? null,
@@ -583,7 +641,8 @@ function normalizeState(s: Partial<FlowState>): FlowState {
 
 /** Best-effort: mirror the appointment into the tenant's Google Calendar. */
 async function syncCalendarEvent(appointmentId: string, ctx: Ctx): Promise<void> {
-  const cal = await orgCalendar(ctx.organizationId);
+  // Prefer the calendar of whoever owns the lead — the meeting is theirs.
+  const cal = await orgCalendar(ctx.organizationId, ctx.assignedUserId ?? ctx.ownerUserId);
   if (!cal) return;
   const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } });
   if (!appt) return;

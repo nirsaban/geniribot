@@ -45,6 +45,18 @@ export function gatewayState(id: string) {
   return call<{ status: GatewayStatus; qr?: string }>(`/connections/${id}/state`);
 }
 
+export function gatewayCreateGroup(
+  id: string,
+  subject: string,
+  phones: string[],
+  welcome?: string,
+) {
+  return call<{ ok: boolean; groupJid: string; added: string[]; failed: string[] }>(
+    `/connections/${id}/group`,
+    { method: "POST", body: JSON.stringify({ subject, phones, welcome }) },
+  );
+}
+
 /** Best-effort — the gateway may be down; callers can degrade gracefully. */
 export async function safeGatewayState(
   id: string,

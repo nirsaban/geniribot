@@ -5,6 +5,7 @@ import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
 import { createFlowAction, toggleFlowActiveAction } from "./actions";
+import { FlowCardActions } from "./FlowCardActions";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function FlowsPage() {
                 </div>
                 <div className="mt-1 text-xs text-amber-700">⚡ {triggerLabel(f.definition)}</div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className={f.isActive ? "badge-green" : "badge-gray"}>
                   {f.isActive ? he.active : he.inactive}
                 </span>
@@ -68,6 +69,7 @@ export default async function FlowsPage() {
                 <Link href={`/dashboard/flows/${f.id}/edit`} className="btn-primary btn-sm">
                   {he.editFlow}
                 </Link>
+                <FlowCardActions id={f.id} name={f.name} />
               </div>
             </Card>
           ))}
