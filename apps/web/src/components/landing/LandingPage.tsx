@@ -3,6 +3,7 @@ import { he } from "@/lib/he";
 import { landing } from "./copy";
 import { Pricing } from "./Pricing";
 import { ParticleField } from "./ParticleField";
+import { HeroCanvas } from "./HeroCanvas";
 import { HeroArt } from "./HeroArt";
 import { Reveal } from "./Reveal";
 import { CountUp } from "./CountUp";
@@ -92,7 +93,9 @@ function Hero() {
   const h = landing.hero;
   return (
     <section className="relative z-10 overflow-hidden border-b border-white/5">
-      <ParticleField className="absolute inset-0 -z-10 h-full w-full opacity-70" />
+      <HeroCanvas className="absolute inset-0 -z-20 h-full w-full" />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-transparent via-[#05070a]/40 to-[#05070a]" />
+      <ParticleField className="absolute inset-0 -z-10 h-full w-full opacity-60" />
       <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-20 pt-14 md:grid-cols-2 md:pb-28 md:pt-20">
         {/* text column (right, in RTL) */}
         <div>
