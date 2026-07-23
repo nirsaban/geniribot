@@ -16,7 +16,15 @@ function messageFor(error?: string): string | null {
   return error;
 }
 
-export function AuthForm({ mode, action }: { mode: "login" | "register"; action: Action }) {
+export function AuthForm({
+  mode,
+  action,
+  next,
+}: {
+  mode: "login" | "register";
+  action: Action;
+  next?: string;
+}) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const isRegister = mode === "register";
   const err = messageFor(state?.error);
@@ -40,6 +48,7 @@ export function AuthForm({ mode, action }: { mode: "login" | "register"; action:
         <div className="card animate-pop p-7 backdrop-blur">
           <h2 className="mb-5 text-lg font-bold text-ink">{isRegister ? he.registerCta : he.loginCta}</h2>
           <form action={formAction} className="space-y-4">
+            {!isRegister && next && <input type="hidden" name="next" value={next} />}
             {isRegister && (
               <>
                 <Field name="orgName" label={he.orgName} />

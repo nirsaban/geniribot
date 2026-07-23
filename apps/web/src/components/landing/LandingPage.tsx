@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { growPaymentUrl } from "@/lib/billing";
 import { he } from "@/lib/he";
 import { landing } from "./copy";
 import { Pricing } from "./Pricing";
@@ -13,7 +14,7 @@ import { FireCanvas } from "./HeroFire";
  * wide-tracked uppercase micro-labels. RTL. Rendered at `/` for anonymous
  * visitors; logged-in users are redirected to the dashboard.
  */
-export function LandingPage() {
+export async function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#05070a] text-slate-300 antialiased">
       <Ambience />
@@ -274,7 +275,8 @@ function Features() {
 }
 
 /* ---------------- pricing ---------------- */
-function Pricingsection() {
+async function Pricingsection() {
+  const paymentUrl = await growPaymentUrl();
   return (
     <section id="pricing" className="relative z-10 mx-auto max-w-6xl px-5 py-24">
       <SectionHead
@@ -283,7 +285,7 @@ function Pricingsection() {
         subtitle={landing.pricing.subtitle}
       />
       <div className="mt-14">
-        <Pricing />
+        <Pricing paymentUrl={paymentUrl} />
       </div>
     </section>
   );

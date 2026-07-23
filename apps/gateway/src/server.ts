@@ -1,8 +1,10 @@
 import Fastify from "fastify";
 import { Worker } from "bullmq";
 import { childLogger } from "@kesher/core";
+import { prisma } from "@kesher/db";
 import { SessionManager } from "./manager.js";
 import { bullConnection, connection, OUTBOUND_QUEUE, type OutboundJob } from "./queues.js";
+import { canSendAndCount } from "./usage.js";
 
 /**
  * WhatsApp gateway — always-on, stateful service (Phase 1).
@@ -62,11 +64,18 @@ app.register(async (instance) => {
     }
     try {
       const result = await manager.createGroup(req.params.id, subject, phones);
-      // Optional first message into the fresh group.
+      // Optional first message into the fresh group — still counts against
+      // the org's monthly message cap like any other outbound send.
       if (welcome) {
-        await manager
-          .send(req.params.id, result.groupJid, welcome, result.groupJid)
-          .catch((err) => log.warn({ err: (err as Error).message }, "group welcome failed"));
+        const conn = await prisma.whatsAppConnection.findUnique({
+          where: { id: req.params.id },
+          select: { organizationId: true },
+        });
+        if (conn && (await canSendAndCount(conn.organizationId))) {
+          await manager
+            .send(req.params.id, result.groupJid, welcome, result.groupJid)
+            .catch((err) => log.warn({ err: (err as Error).message }, "group welcome failed"));
+        }
       }
       return { ok: true, ...result };
     } catch (err) {
@@ -79,6 +88,14 @@ app.register(async (instance) => {
     async (req, reply) => {
       const { to, text } = req.body ?? {};
       if (!to || !text) return reply.code(400).send({ error: "to and text required" });
+      const conn = await prisma.whatsAppConnection.findUnique({
+        where: { id: req.params.id },
+        select: { organizationId: true },
+      });
+      if (!conn) return reply.code(404).send({ error: "connection not found" });
+      if (!(await canSendAndCount(conn.organizationId))) {
+        return reply.code(402).send({ error: "message_limit_reached" });
+      }
       await manager.send(req.params.id, to, text);
       return { ok: true };
     },
@@ -89,6 +106,10 @@ app.register(async (instance) => {
 const outboundWorker = new Worker<OutboundJob>(
   OUTBOUND_QUEUE,
   async (job) => {
+    if (!(await canSendAndCount(job.data.organizationId))) {
+      log.warn({ organizationId: job.data.organizationId }, "monthly message cap reached, dropping send");
+      return;
+    }
     await manager.send(job.data.connectionId, job.data.to, job.data.text, job.data.toJid);
   },
   { connection: bullConnection, concurrency: 5 },

@@ -2,15 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { planLimits, type PlanId } from "@kesher/billing";
+import { planLimits } from "@kesher/billing";
 import { prisma, type Prisma } from "@kesher/db";
 import { encField } from "@/lib/enc";
 import { gatewayConnect, gatewayLogout } from "@/lib/gateway";
+import { effectivePlanForOrg } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 async function atConnectionLimit(org: string): Promise<boolean> {
-  const orgRow = await prisma.organization.findUnique({ where: { id: org }, select: { plan: true } });
-  const limit = planLimits((orgRow?.plan ?? "FREE") as PlanId).connections;
+  const limit = planLimits(await effectivePlanForOrg(org)).connections;
   const existing = await prisma.whatsAppConnection.count({ where: { organizationId: org } });
   return existing >= limit;
 }

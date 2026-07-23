@@ -50,3 +50,22 @@ export async function growPlatformConfigured(): Promise<boolean> {
   const org = await platformOrgId();
   return org ? Boolean(await growConfigForOrg(org)) : false;
 }
+
+/**
+ * Fallback used until the super admin sets one in /admin (or the platform
+ * org isn't provisioned yet, e.g. a fresh dev database).
+ */
+const DEFAULT_GROW_PAYMENT_URL =
+  "https://pay.grow.link/MTAzNTk4~eed6c18dda5397dbf9505860c9b4d429-Mzc0Mjc0Mw";
+
+/**
+ * The static hosted Grow payment page (both paid plans, picked there) that
+ * the landing page and the in-app plan picker link to when per-org API
+ * checkout isn't configured. Super-admin editable in /admin.
+ */
+export async function growPaymentUrl(): Promise<string> {
+  const org = await platformOrgId();
+  if (!org) return DEFAULT_GROW_PAYMENT_URL;
+  const row = await prisma.organization.findUnique({ where: { id: org }, select: { growPaymentUrl: true } });
+  return row?.growPaymentUrl || DEFAULT_GROW_PAYMENT_URL;
+}

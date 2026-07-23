@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
 import { GROW_SECRETS } from "@/lib/billing";
+import { requireFeature } from "@/lib/plan";
 import { deleteSecret, setSecret } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
 
@@ -25,7 +26,9 @@ export async function disconnectGoogleAction(): Promise<void> {
 /** Save the org's automatic cold-lead follow-up policy. */
 export async function saveFollowUpAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
-  const enabled = formData.get("enabled") === "1";
+  // Clamp rather than reject: a plan that lost the feature (downgrade, lapsed
+  // subscription) simply can't turn it on, regardless of what was submitted.
+  const enabled = formData.get("enabled") === "1" && (await requireFeature(org, "followups"));
   // Clamp instead of reject: a bad hand-typed number should degrade to a sane
   // policy, not silently disable follow-ups.
   const afterHours = Math.min(24 * 14, Math.max(1, Number(formData.get("afterHours")) || 48));

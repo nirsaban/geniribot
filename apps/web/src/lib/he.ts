@@ -65,6 +65,9 @@ export const he = {
   copyLink: "העתק",
   platformGrow: "הגדרות תשלום (Grow) — פלטפורמה",
   platformGrowDesc: "מפתחות Grow ברמת הפלטפורמה. רק אתה (מנהל-על) רואה זאת. לקוחות אינם נחשפים לתשלום.",
+  platformPaymentUrl: "קישור לעמוד תשלום (Grow)",
+  platformPaymentUrlDesc: "הקישור לעמוד התשלום הסטטי שהוקם ב-Grow (עם שני המסלולים). דף הנחיתה ועמוד \"בחירת מסלול\" מפנים לכאן כל עוד החיוב האוטומטי דרך ה-API לא מוגדר.",
+  platformPaymentUrlPlaceholder: "https://pay.grow.link/...",
   backToApp: "→ לאזור הלקוח",
 
   // platform Meta / Embedded Signup config
@@ -275,6 +278,16 @@ export const he = {
   upgrade: "שדרג/י",
   growNotConfigured: "כדי לגבות תשלום צריך קודם לחבר את חשבון Grow שלך (ראה/י אשף ההקמה).",
   goToOnboarding: "לאשף ההקמה",
+  featureLockedTitle: "היכולת הזו דורשת שדרוג מסלול",
+  featureLockedBroadcasts: "תפוצות והקבצות ל-WhatsApp זמינות במסלול המקצועי.",
+  featureLockedFollowups: "תזכורות אוטומטיות זמינות החל ממסלול בסיסי.",
+  featureLockedCalendar: "סנכרון יומן Google זמין החל ממסלול בסיסי.",
+  featureLockedCta: "שדרג/י מסלול",
+  contactsLimitReached: "הגעתם למכסת הלידים במסלול הנוכחי. שדרגו כדי להוסיף עוד.",
+  thankYouTitle: "התשלום התקבל 🎉",
+  thankYouBody: "תודה שבחרת ב-GeniriBot! נשאר רק שלב אחד — פתיחת חשבון כדי להתחיל להקים את הבוט.",
+  thankYouCta: "צור/י חשבון",
+  thankYouHaveAccount: "כבר יש לך חשבון?",
 
   // secrets (secure paste)
   secretsTitle: "מפתחות סודיים (Grow)",

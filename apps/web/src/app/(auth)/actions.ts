@@ -45,6 +45,12 @@ export async function registerAction(
   redirect("/dashboard/billing?welcome=1");
 }
 
+/** Only an internal, single-segment-rooted path is safe to redirect to. */
+function safeNext(next: FormDataEntryValue | null): string | null {
+  const s = typeof next === "string" ? next : "";
+  return s.startsWith("/") && !s.startsWith("//") ? s : null;
+}
+
 export async function loginAction(
   _prev: { error?: string } | undefined,
   formData: FormData,
@@ -63,5 +69,8 @@ export async function loginAction(
     role: user.role,
     sa: user.isSuperAdmin,
   });
-  redirect(user.isSuperAdmin ? "/admin" : "/dashboard");
+  // Landing-page CTAs (e.g. "start free") send people through login with a
+  // `next` — most often straight back to the plan picker — so login doesn't
+  // dead-end them on the generic dashboard home.
+  redirect(safeNext(formData.get("next")) ?? (user.isSuperAdmin ? "/admin" : "/dashboard"));
 }

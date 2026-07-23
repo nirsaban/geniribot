@@ -3,6 +3,7 @@ import { PLANS, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
+import { effectivePlanForOrg } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 import { checkoutAction } from "./actions";
 
@@ -21,7 +22,7 @@ export default async function BillingPage({
 
   const org = await prisma.organization.findUnique({ where: { id: session.org } });
   if (!org) redirect("/login");
-  const current = org.plan as PlanId;
+  const current = await effectivePlanForOrg(session.org);
   const firstTime = !org.onboardedAt;
 
   // A first-time tenant who just paid continues straight to setup.

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
 import { collectAudience } from "@/lib/audience";
 import { gatewayCreateGroup } from "@/lib/gateway";
+import { requireFeature } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 async function requireOrg(): Promise<string> {
@@ -16,6 +17,7 @@ async function requireOrg(): Promise<string> {
 /** Create a broadcast (immediate or scheduled) with its resolved recipients. */
 export async function createBroadcastAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
+  if (!(await requireFeature(org, "broadcasts"))) redirect("/dashboard/broadcasts/new?error=locked");
   const name = String(formData.get("name") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
   if (!name || !message) redirect("/dashboard/broadcasts/new?error=missing");
@@ -72,6 +74,7 @@ export async function cancelBroadcastAction(formData: FormData): Promise<void> {
 /** Create a WhatsApp group from an audience and optionally post a welcome. */
 export async function createGroupAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
+  if (!(await requireFeature(org, "groups"))) redirect("/dashboard/groups?error=locked");
   const subject = String(formData.get("subject") ?? "").trim();
   const welcome = String(formData.get("welcome") ?? "").trim();
   if (!subject) redirect("/dashboard/groups?error=missing");

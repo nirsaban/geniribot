@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@kesher/billing": "workspace:*",
     "@kesher/calendar": "workspace:*",
     "@kesher/core": "workspace:*",
     "@kesher/db": "workspace:*",

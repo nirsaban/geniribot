@@ -5,13 +5,14 @@ import { redirect } from "next/navigation";
 import { PLANS, planPrice, type BillingInterval, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { withBase } from "@/lib/basePath";
-import { growPlatformProvider } from "@/lib/billing";
+import { growPaymentUrl, growPlatformProvider } from "@/lib/billing";
 import { getSession } from "@/lib/session";
 
 /**
  * Start a plan change. FREE applies immediately; paid plans go through Grow's
- * recurring payment page — each renewal fires our webhook. If the platform
- * hasn't configured Grow yet, we send the tenant to onboarding.
+ * recurring payment page — each renewal fires our webhook. Until per-org API
+ * checkout is configured, paid plans fall back to the static Grow payment
+ * page set in /admin.
  */
 export async function checkoutAction(formData: FormData): Promise<void> {
   const session = await getSession();
@@ -36,9 +37,10 @@ export async function checkoutAction(formData: FormData): Promise<void> {
 
   const provider = await growPlatformProvider();
   if (!provider) {
-    // Platform payments not set up yet — the super admin unlocks plans manually.
-    // A brand-new tenant shouldn't be blocked from setup while that happens.
-    redirect(firstTime ? "/dashboard/onboarding" : "/dashboard/billing?pending=1");
+    // API-driven checkout isn't configured yet — send them to the static
+    // Grow payment page instead (super-admin sets it in /admin) rather than
+    // stalling a brand-new tenant's setup.
+    redirect(await growPaymentUrl());
   }
 
   const base = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";

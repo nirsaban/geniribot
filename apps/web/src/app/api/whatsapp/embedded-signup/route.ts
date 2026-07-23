@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { completeEmbeddedSignup } from "@kesher/whatsapp";
-import { planLimits, type PlanId } from "@kesher/billing";
+import { planLimits } from "@kesher/billing";
 import { prisma, type Prisma } from "@kesher/db";
 import { encField } from "@/lib/enc";
 import { gatewayConnect } from "@/lib/gateway";
 import { metaServerConfig } from "@/lib/meta";
+import { effectivePlanForOrg } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -35,8 +36,7 @@ export async function POST(req: Request) {
   }
 
   // Plan gate (mirror connections/actions.ts atConnectionLimit).
-  const orgRow = await prisma.organization.findUnique({ where: { id: org }, select: { plan: true } });
-  const limit = planLimits((orgRow?.plan ?? "FREE") as PlanId).connections;
+  const limit = planLimits(await effectivePlanForOrg(org)).connections;
   const existing = await prisma.whatsAppConnection.count({ where: { organizationId: org } });
   if (existing >= limit) {
     return NextResponse.json({ error: "connection_limit", limit }, { status: 402 });

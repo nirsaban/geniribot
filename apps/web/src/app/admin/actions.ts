@@ -43,6 +43,14 @@ export async function removePlatformGrowAction(): Promise<void> {
   revalidatePath("/admin");
 }
 
+/** Save the static Grow payment page URL (landing page + billing page fallback). */
+export async function savePlatformPaymentUrlAction(formData: FormData): Promise<void> {
+  const { org } = await requireSuperAdmin();
+  const url = String(formData.get("url") ?? "").trim();
+  await prisma.organization.update({ where: { id: org }, data: { growPaymentUrl: url || null } });
+  revalidatePath("/admin");
+}
+
 /** Save the PLATFORM Meta / Embedded Signup config (stored on the platform org). */
 export async function savePlatformMetaAction(formData: FormData): Promise<void> {
   const { org } = await requireSuperAdmin();

@@ -34,8 +34,15 @@ model Organization {
   broadcasts    Broadcast[]
   subscription  Subscription?
   payments      Payment[]
+  messageUsage  MessageUsage[]
   onboardedAt   DateTime?
   calcomLink    String?
+  /**
+   * Static hosted Grow payment page (both paid plans, picked on Grow's own
+   * page) — set on the platform org only, super-admin editable. Used until
+   * per-org API-driven checkout (pageCode/userId/apiKey) is fully live.
+   */
+  growPaymentUrl String?
 
   /**
    * Automatic follow-up nudges for leads that went quiet. Off by default —
@@ -221,6 +228,26 @@ model WebhookEvent {
   createdAt  DateTime @default(now())
 
   @@unique([provider, externalId])
+}
+
+/**
+ * Outbound WhatsApp message count per org per calendar month — the meter
+ * behind the `monthlyMessages` plan limit. Incremented by the gateway right
+ * before each send (the single choke point every producer funnels through),
+ * so it's accurate regardless of whether the send came from a bot reply,
+ * broadcast, reminder, or follow-up.
+ */
+model MessageUsage {
+  id             String   @id @default(cuid())
+  organizationId String
+  /** Calendar month key, e.g. "2026-07". */
+  yearMonth      String
+  count          Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, yearMonth])
 }
 
 // ---------- WhatsApp ----------

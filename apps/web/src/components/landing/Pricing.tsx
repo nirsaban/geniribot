@@ -8,7 +8,7 @@ import { landing } from "./copy";
 const ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 const c = landing.pricing;
 
-export function Pricing() {
+export function Pricing({ paymentUrl }: { paymentUrl: string }) {
   const [interval, setInterval] = useState<BillingInterval>("MONTHLY");
   const annual = interval === "ANNUAL";
 
@@ -41,7 +41,10 @@ export function Pricing() {
           const featured = id === "STARTER";
           const isFree = id === "FREE";
           const price = isFree ? 0 : annual ? plan.annualIls : plan.priceIls;
-          const href = `/register?plan=${id}&interval=${interval}`;
+          // Free: login (existing users) — the billing page offers the plan
+          // choice again right after. Paid: straight to the Grow payment page;
+          // people without an account yet create one after paying.
+          const href = isFree ? "/login?next=/dashboard/billing" : paymentUrl;
 
           return (
             <div

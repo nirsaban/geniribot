@@ -5,6 +5,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { withBase } from "@/lib/basePath";
 import { googleConfigured } from "@/lib/google";
 import { he } from "@/lib/he";
+import { requireFeature } from "@/lib/plan";
 import { secretMask } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
 import { saveCalcomLinkAction } from "../onboarding/actions";
@@ -39,6 +40,10 @@ export default async function SettingsPage({
     },
   });
   const configured = googleConfigured();
+  const [calendarEntitled, followupsEntitled] = await Promise.all([
+    requireFeature(session.org, "calendarSync"),
+    requireFeature(session.org, "followups"),
+  ]);
 
   const calcomSecretMask = await secretMask(session.org, "calcom_webhook_secret");
   // The public webhook URL for this tenant — built from the request's own host
@@ -69,7 +74,11 @@ export default async function SettingsPage({
               <p className="mt-1 text-sm text-slate-500">{he.googleCalendarDesc}</p>
             </div>
             <div className="sm:shrink-0">
-              {!configured ? (
+              {!calendarEntitled ? (
+                <a href={withBase("/dashboard/billing")} className="btn-secondary btn-sm">
+                  🔒 {he.featureLockedCta}
+                </a>
+              ) : !configured ? (
                 <span className="badge-amber">{he.googleNotConfigured}</span>
               ) : integration ? (
                 <form action={disconnectGoogleAction}>
@@ -82,11 +91,14 @@ export default async function SettingsPage({
               )}
             </div>
           </div>
-          {configured && integration && (
+          {!calendarEntitled && (
+            <p className="mt-3 text-xs text-amber-700">{he.featureLockedCalendar}</p>
+          )}
+          {calendarEntitled && configured && integration && (
             <div className="mt-3 badge-green">{he.googleConnected}</div>
           )}
-          {configured && <p className="mt-3 text-xs text-slate-400">{he.googlePerUserHint}</p>}
-          {!configured && (
+          {calendarEntitled && configured && <p className="mt-3 text-xs text-slate-400">{he.googlePerUserHint}</p>}
+          {calendarEntitled && !configured && (
             <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
               {he.googleSetupHint}
               <code dir="ltr" className="mt-2 block select-all break-all rounded-lg bg-white/70 p-2 text-left">
@@ -135,6 +147,14 @@ export default async function SettingsPage({
         <Card>
           <h2 className="flex items-center gap-2 font-semibold text-ink">🔥 {he.followUpsTitle}</h2>
           <p className="mb-3 mt-1 text-sm text-slate-500">{he.followUpsDesc}</p>
+          {!followupsEntitled ? (
+            <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+              {he.featureLockedFollowups}{" "}
+              <a href={withBase("/dashboard/billing")} className="font-semibold underline">
+                {he.featureLockedCta}
+              </a>
+            </div>
+          ) : (
           <form action={saveFollowUpAction} className="space-y-3">
             <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
               <input
@@ -192,6 +212,7 @@ export default async function SettingsPage({
             </div>
             <button className="btn-primary">{he.saveSecret}</button>
           </form>
+          )}
         </Card>
 
         <Card>

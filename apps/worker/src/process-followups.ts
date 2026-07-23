@@ -1,3 +1,4 @@
+import { effectivePlan, planHasFeature, type PlanId } from "@kesher/billing";
 import { childLogger } from "@kesher/core";
 import { prisma } from "@kesher/db";
 import { OUTBOUND_JOB, outboundQueue } from "./queues.js";
@@ -46,10 +47,21 @@ export async function processFollowUps(now: Date = new Date()): Promise<void> {
 
   const orgs = await prisma.organization.findMany({
     where: { followUpEnabled: true },
-    select: { id: true, followUpAfterHours: true, followUpMax: true, followUpMessage: true },
+    select: {
+      id: true,
+      plan: true,
+      followUpAfterHours: true,
+      followUpMax: true,
+      followUpMessage: true,
+      subscription: { select: { status: true, currentPeriodEnd: true } },
+    },
   });
 
   for (const org of orgs) {
+    // Defense in depth: `followUpEnabled` can go stale on a lapsed/downgraded
+    // subscription (nothing clears it on expiry) — never trust it alone.
+    if (!planHasFeature(effectivePlan(org.plan as PlanId, org.subscription), "followups")) continue;
+
     const conn = await prisma.whatsAppConnection.findFirst({
       where: { organizationId: org.id, status: "CONNECTED" },
       select: { id: true },

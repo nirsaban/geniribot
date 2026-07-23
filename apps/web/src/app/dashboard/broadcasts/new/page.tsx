@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
+import { requireFeature } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 import { createBroadcastAction } from "../actions";
 import { AudienceFields } from "../AudienceFields";
@@ -16,6 +17,20 @@ export default async function NewBroadcastPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const { error } = await searchParams;
+
+  if (!(await requireFeature(session.org, "broadcasts"))) {
+    return (
+      <>
+        <PageHeader title={he.newBroadcast} subtitle={he.broadcastsSubtitle} />
+        <EmptyState
+          icon="🔒"
+          title={he.featureLockedTitle}
+          body={he.featureLockedBroadcasts}
+          action={<LinkButton href="/dashboard/billing">{he.featureLockedCta}</LinkButton>}
+        />
+      </>
+    );
+  }
 
   const tagRows = await prisma.contact.findMany({
     where: { organizationId: session.org },

@@ -4,6 +4,7 @@ import { hasRole, type Role } from "@kesher/core";
 import { prisma } from "@kesher/db";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
+import { contactsLimitReached } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 import type { FieldSpec } from "@kesher/flow-engine";
 import {
@@ -79,7 +80,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const sort = isLeadSort(params.sort) ? params.sort : "new";
   const page = Math.max(1, Number(params.page ?? 1) || 1);
 
-  const [total, contacts, members, scenarios, tagRows] = await Promise.all([
+  const [total, contacts, members, scenarios, tagRows, atContactsLimit] = await Promise.all([
     prisma.contact.count({ where }),
     prisma.contact.findMany({
       where,
@@ -100,6 +101,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       where: buildLeadWhere(session.org, {}, viewer),
       select: { tags: true },
     }),
+    contactsLimitReached(session.org),
   ]);
 
   const allTags = [...new Set(tagRows.flatMap((r) => r.tags))].sort();
@@ -146,6 +148,15 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           ) : undefined
         }
       />
+
+      {atContactsLimit && (
+        <div className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+          {he.contactsLimitReached}{" "}
+          <a href="/dashboard/billing" className="font-semibold underline">
+            {he.featureLockedCta}
+          </a>
+        </div>
+      )}
 
       {/* Filters — a plain GET form, so every filter state is a shareable URL. */}
       <Card className="mb-5">

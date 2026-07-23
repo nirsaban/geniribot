@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { PLANS, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { Card, PageHeader, Stat } from "@/components/ui";
-import { GROW_SECRETS, platformOrgId } from "@/lib/billing";
+import { GROW_SECRETS, growPaymentUrl, platformOrgId } from "@/lib/billing";
 import { he } from "@/lib/he";
 import { META_SECRETS } from "@/lib/meta";
 import { getSecret, secretMask } from "@/lib/secrets";
@@ -13,6 +13,7 @@ import {
   removePlatformMetaAction,
   savePlatformGrowAction,
   savePlatformMetaAction,
+  savePlatformPaymentUrlAction,
   setOrgPlanAction,
 } from "./actions";
 import { MetaSecrets } from "./MetaSecrets";
@@ -55,6 +56,7 @@ export default async function AdminPage() {
       : [null, null, null, null, null];
 
   const fmt = (d: Date) => new Intl.DateTimeFormat("he-IL", { dateStyle: "short" }).format(d);
+  const paymentUrl = await growPaymentUrl();
 
   return (
     <>
@@ -115,6 +117,24 @@ export default async function AdminPage() {
               </tbody>
             </table>
           </div>
+        </Card>
+      </div>
+
+      {/* Static Grow payment page link — used until API checkout is live */}
+      <div className="mt-6">
+        <h2 className="mb-1 font-semibold text-ink">{he.platformPaymentUrl}</h2>
+        <p className="mb-3 text-sm text-slate-500">{he.platformPaymentUrlDesc}</p>
+        <Card>
+          <form action={savePlatformPaymentUrlAction} className="flex flex-wrap gap-2">
+            <input
+              name="url"
+              defaultValue={paymentUrl}
+              dir="ltr"
+              placeholder={he.platformPaymentUrlPlaceholder}
+              className="input min-w-0 flex-1 text-left"
+            />
+            <button className="btn-primary shrink-0">{he.saveSecret}</button>
+          </form>
         </Card>
       </div>
 

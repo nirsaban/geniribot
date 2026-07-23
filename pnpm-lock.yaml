@@ -20,6 +20,9 @@ importers:
 
   apps/gateway:
     dependencies:
+      '@kesher/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@kesher/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -121,6 +124,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@kesher/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@kesher/calendar':
         specifier: workspace:*
         version: link:../../packages/calendar
