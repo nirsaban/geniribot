@@ -6,11 +6,12 @@ import { planLimits } from "@kesher/billing";
 import { prisma, type Prisma } from "@kesher/db";
 import { encField } from "@/lib/enc";
 import { gatewayConnect, gatewayLogout } from "@/lib/gateway";
-import { effectivePlanForOrg } from "@/lib/plan";
+import { effectivePlanForOrg, getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 async function atConnectionLimit(org: string): Promise<boolean> {
-  const limit = planLimits(await effectivePlanForOrg(org)).connections;
+  const [plan, catalog] = await Promise.all([effectivePlanForOrg(org), getPlanCatalog()]);
+  const limit = planLimits(plan, catalog).connections;
   const existing = await prisma.whatsAppConnection.count({ where: { organizationId: org } });
   return existing >= limit;
 }

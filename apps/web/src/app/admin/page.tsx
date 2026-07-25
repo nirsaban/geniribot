@@ -1,16 +1,18 @@
 import { redirect } from "next/navigation";
-import { PLANS, type PlanId } from "@kesher/billing";
+import { type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { Card, PageHeader, Stat } from "@/components/ui";
 import { GROW_SECRETS, growPaymentUrl, platformOrgId } from "@/lib/billing";
 import { he } from "@/lib/he";
 import { META_SECRETS } from "@/lib/meta";
+import { getPlanCatalog } from "@/lib/plan";
 import { getSecret, secretMask } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
 import { GrowSecrets } from "../dashboard/settings/GrowSecrets";
 import {
   removePlatformGrowAction,
   removePlatformMetaAction,
+  savePlanConfigAction,
   savePlatformGrowAction,
   savePlatformMetaAction,
   savePlatformPaymentUrlAction,
@@ -22,6 +24,7 @@ import { PaymentLink } from "./PaymentLink";
 export const dynamic = "force-dynamic";
 
 const PLAN_TONE: Record<PlanId, string> = { FREE: "badge-gray", STARTER: "badge-brand", PRO: "badge-green" };
+const PLAN_ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 
 export default async function AdminPage() {
   const session = await getSession();
@@ -56,7 +59,7 @@ export default async function AdminPage() {
       : [null, null, null, null, null];
 
   const fmt = (d: Date) => new Intl.DateTimeFormat("he-IL", { dateStyle: "short" }).format(d);
-  const paymentUrl = await growPaymentUrl();
+  const [paymentUrl, catalog] = await Promise.all([growPaymentUrl(), getPlanCatalog()]);
 
   return (
     <>
@@ -88,7 +91,7 @@ export default async function AdminPage() {
                 {orgs.map((o) => (
                   <tr key={o.id} className="border-b border-line/60 last:border-0">
                     <td className="p-3 font-medium text-ink">{o.name}</td>
-                    <td className="p-3"><span className={PLAN_TONE[o.plan as PlanId]}>{PLANS[o.plan as PlanId].name}</span></td>
+                    <td className="p-3"><span className={PLAN_TONE[o.plan as PlanId]}>{catalog[o.plan as PlanId].name}</span></td>
                     <td className="p-3 text-slate-500">{o._count.users}</td>
                     <td className="p-3 text-slate-500">{o._count.contacts}</td>
                     <td className="p-3 text-slate-400">{fmt(o.createdAt)}</td>
@@ -104,7 +107,7 @@ export default async function AdminPage() {
                                   o.plan === p ? "border-brand bg-brand/10 text-brand-dark" : "border-line text-slate-500 hover:bg-slate-50"
                                 }`}
                               >
-                                {PLANS[p].name}
+                                {catalog[p].name}
                               </button>
                             </form>
                           ))}
@@ -118,6 +121,41 @@ export default async function AdminPage() {
             </table>
           </div>
         </Card>
+      </div>
+
+      {/* Plan pricing & limits — overrides the hardcoded defaults everywhere */}
+      <div className="mt-6">
+        <h2 className="mb-1 font-semibold text-ink">{he.planConfigTitle}</h2>
+        <p className="mb-3 text-sm text-slate-500">{he.planConfigDesc}</p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {PLAN_ORDER.map((id) => {
+            const plan = catalog[id];
+            return (
+              <Card key={id}>
+                <form action={savePlanConfigAction} className="space-y-3">
+                  <input type="hidden" name="id" value={id} />
+                  <div className="flex items-center justify-between">
+                    <span className={PLAN_TONE[id]}>{plan.name}</span>
+                  </div>
+                  <NumField label={he.planConfigPriceMonthly} name="priceIls" defaultValue={plan.priceIls} />
+                  <NumField label={he.planConfigPriceAnnual} name="annualIls" defaultValue={plan.annualIls} />
+                  <NumField
+                    label={he.planConfigConnections}
+                    name="connections"
+                    defaultValue={plan.limits.connections}
+                  />
+                  <NumField label={he.planConfigContacts} name="contacts" defaultValue={plan.limits.contacts} />
+                  <NumField
+                    label={he.planConfigMessages}
+                    name="monthlyMessages"
+                    defaultValue={plan.limits.monthlyMessages}
+                  />
+                  <button className="btn-primary btn-sm w-full">{he.saveSecret}</button>
+                </form>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       {/* Static Grow payment page link — used until API checkout is live */}
@@ -170,5 +208,29 @@ export default async function AdminPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+function NumField({
+  label,
+  name,
+  defaultValue,
+}: {
+  label: string;
+  name: string;
+  defaultValue: number;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-slate-500">{label}</span>
+      <input
+        name={name}
+        type="number"
+        min={0}
+        defaultValue={defaultValue}
+        dir="ltr"
+        className="input mt-0.5 w-full text-left"
+      />
+    </label>
   );
 }

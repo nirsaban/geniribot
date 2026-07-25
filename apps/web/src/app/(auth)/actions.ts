@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { hashPassword, verifyPassword } from "@kesher/core";
 import { prisma } from "@kesher/db";
+import { claimUnclaimedPayment } from "@/lib/subscriptions";
 import { createSession } from "@/lib/session";
 
 function slugify(name: string): string {
@@ -41,8 +42,16 @@ export async function registerAction(
   });
 
   await createSession({ sub: user.id, org: user.organizationId, role: "OWNER" });
+
+  // Someone who paid before creating an account (landing page "pay first"
+  // flow) can claim that payment right here with the phone/email they used.
+  const claimInput = String(formData.get("claimPayment") ?? "").trim();
+  const claimed = claimInput
+    ? (await claimUnclaimedPayment(user.organizationId, claimInput)).applied
+    : false;
+
   // New tenants pick a plan first, then continue to onboarding.
-  redirect("/dashboard/billing?welcome=1");
+  redirect(claimed ? "/dashboard/billing?claimed=1" : "/dashboard/billing?welcome=1");
 }
 
 /** Only an internal, single-segment-rooted path is safe to redirect to. */

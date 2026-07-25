@@ -51,6 +51,29 @@ export async function savePlatformPaymentUrlAction(formData: FormData): Promise<
   revalidatePath("/admin");
 }
 
+/** Save price + limits for one plan — overrides the hardcoded defaults everywhere they're read. */
+export async function savePlanConfigAction(formData: FormData): Promise<void> {
+  await requireSuperAdmin();
+  const id = String(formData.get("id") ?? "") as PlanId;
+  if (!(id in PLANS)) return;
+
+  const num = (name: string, fallback: number) => {
+    const v = Number(formData.get(name));
+    return Number.isFinite(v) && v >= 0 ? Math.round(v) : fallback;
+  };
+  const data = {
+    priceIls: num("priceIls", PLANS[id].priceIls),
+    annualIls: num("annualIls", PLANS[id].annualIls),
+    connections: num("connections", PLANS[id].limits.connections),
+    contacts: num("contacts", PLANS[id].limits.contacts),
+    monthlyMessages: num("monthlyMessages", PLANS[id].limits.monthlyMessages),
+  };
+  await prisma.planConfig.upsert({ where: { id }, create: { id, ...data }, update: data });
+  revalidatePath("/admin");
+  revalidatePath("/dashboard/billing");
+  revalidatePath("/");
+}
+
 /** Save the PLATFORM Meta / Embedded Signup config (stored on the platform org). */
 export async function savePlatformMetaAction(formData: FormData): Promise<void> {
   const { org } = await requireSuperAdmin();

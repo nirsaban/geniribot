@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { LogoMark } from "@/components/Logo";
 import { he } from "@/lib/he";
 
 type Action = (
@@ -38,8 +39,8 @@ export function AuthForm({
 
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-6 flex flex-col items-center text-center">
-          <span className="logo-3d mb-4 grid h-16 w-16 animate-float place-items-center rounded-2xl text-3xl font-black text-white">
-            G
+          <span className="logo-3d mb-4 grid h-16 w-16 animate-float place-items-center rounded-2xl text-white">
+            <LogoMark className="h-9 w-9" />
           </span>
           <h1 className="gradient-text text-3xl font-black">{he.appName}</h1>
           <p className="mt-1.5 text-sm text-slate-500">{he.tagline}</p>
@@ -57,6 +58,15 @@ export function AuthForm({
             )}
             <Field name="email" label={he.email} type="email" dir="ltr" />
             <Field name="password" label={he.password} type="password" dir="ltr" />
+            {isRegister && (
+              <Field
+                name="claimPayment"
+                label={he.claimPaymentLabel}
+                required={false}
+                dir="ltr"
+              />
+            )}
+            {isRegister && <p className="-mt-2 text-xs text-slate-400">{he.claimPaymentHint}</p>}
 
             {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
 

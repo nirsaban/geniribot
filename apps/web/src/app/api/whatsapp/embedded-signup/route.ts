@@ -5,7 +5,7 @@ import { prisma, type Prisma } from "@kesher/db";
 import { encField } from "@/lib/enc";
 import { gatewayConnect } from "@/lib/gateway";
 import { metaServerConfig } from "@/lib/meta";
-import { effectivePlanForOrg } from "@/lib/plan";
+import { effectivePlanForOrg, getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,8 @@ export async function POST(req: Request) {
   }
 
   // Plan gate (mirror connections/actions.ts atConnectionLimit).
-  const limit = planLimits(await effectivePlanForOrg(org)).connections;
+  const [effPlan, catalog] = await Promise.all([effectivePlanForOrg(org), getPlanCatalog()]);
+  const limit = planLimits(effPlan, catalog).connections;
   const existing = await prisma.whatsAppConnection.count({ where: { organizationId: org } });
   if (existing >= limit) {
     return NextResponse.json({ error: "connection_limit", limit }, { status: 402 });

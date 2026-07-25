@@ -52,16 +52,39 @@ export const PLANS: Record<PlanId, Plan> = {
   },
 };
 
-export function planLimits(id: PlanId): PlanLimits {
-  return PLANS[id].limits;
+/** `catalog` defaults to the static PLANS; pass the super-admin-configured one (see `loadPlanCatalog`) where it matters. */
+export function planLimits(id: PlanId, catalog: Record<PlanId, Plan> = PLANS): PlanLimits {
+  return catalog[id].limits;
 }
 
 /** The charge amount (VAT-included ILS) for a plan at a given billing interval. */
-export function planPrice(id: PlanId, interval: BillingInterval): number {
-  return interval === "ANNUAL" ? PLANS[id].annualIls : PLANS[id].priceIls;
+export function planPrice(
+  id: PlanId,
+  interval: BillingInterval,
+  catalog: Record<PlanId, Plan> = PLANS,
+): number {
+  return interval === "ANNUAL" ? catalog[id].annualIls : catalog[id].priceIls;
 }
 
 /** How many months a paid period covers, for computing the next renewal date. */
 export function intervalMonths(interval: BillingInterval): number {
   return interval === "ANNUAL" ? 12 : 1;
+}
+
+/**
+ * Recover the plan + interval from a charged amount alone. Used when a Grow
+ * callback doesn't carry our custom fields (e.g. a payment made through a
+ * static hosted page we didn't generate) — the price uniquely identifies
+ * which plan/cycle was bought since each combination has a fixed price.
+ */
+export function planAndIntervalFromAmount(
+  amountIls: number,
+  catalog: Record<PlanId, Plan> = PLANS,
+): { plan: PlanId; interval: BillingInterval } | null {
+  for (const id of Object.keys(catalog) as PlanId[]) {
+    if (id === "FREE") continue;
+    if (amountIls === catalog[id].priceIls) return { plan: id, interval: "MONTHLY" };
+    if (amountIls === catalog[id].annualIls) return { plan: id, interval: "ANNUAL" };
+  }
+  return null;
 }

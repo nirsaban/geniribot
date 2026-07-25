@@ -132,6 +132,21 @@ enum Plan {
   PRO
 }
 
+/**
+ * Super-admin-editable overrides for the plan catalog (price + limits).
+ * Absence of a row (or a null field) falls back to the hardcoded defaults in
+ * `@kesher/billing`'s PLANS — see `mergePlans`/`loadPlanCatalog`.
+ */
+model PlanConfig {
+  id              Plan     @id
+  priceIls        Int
+  annualIls       Int
+  connections     Int
+  contacts        Int
+  monthlyMessages Int
+  updatedAt       DateTime @updatedAt
+}
+
 // ---------- Billing / subscriptions ----------
 
 /**
@@ -228,6 +243,33 @@ model WebhookEvent {
   createdAt  DateTime @default(now())
 
   @@unique([provider, externalId])
+}
+
+/**
+ * A real Grow charge whose callback carried no organizationId (cField1) —
+ * e.g. a payment made through the static hosted page, or "pay first, then
+ * register" from the landing page. Plan/interval are recovered from the
+ * charged amount. Sits unclaimed until the payer registers or logs in and
+ * matches it by the phone/email they paid with (see `claimUnclaimedPayment`).
+ */
+model UnclaimedGrowPayment {
+  id                String          @id @default(cuid())
+  growTransactionId String          @unique
+  plan              Plan
+  interval          BillingInterval
+  amountIls         Int
+  payerPhone        String?
+  payerEmail        String?
+  cardSuffix        String?
+  cardBrand         String?
+  invoiceUrl        String?
+  paidAt            DateTime
+  claimedByOrgId    String?
+  claimedAt         DateTime?
+  createdAt         DateTime        @default(now())
+
+  @@index([payerPhone])
+  @@index([payerEmail])
 }
 
 /**

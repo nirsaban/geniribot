@@ -1,4 +1,4 @@
-import { effectivePlan, planLimits, type PlanId } from "@kesher/billing";
+import { effectivePlan, loadPlanCatalog, planLimits, type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 
 function yearMonth(d: Date): string {
@@ -20,7 +20,8 @@ export async function canSendAndCount(organizationId: string): Promise<boolean> 
   });
   if (!org) return false;
   const plan = effectivePlan(org.plan as PlanId, org.subscription);
-  const limit = planLimits(plan).monthlyMessages;
+  const catalog = await loadPlanCatalog(prisma);
+  const limit = planLimits(plan, catalog).monthlyMessages;
 
   const ym = yearMonth(new Date());
   const key = { organizationId_yearMonth: { organizationId, yearMonth: ym } };

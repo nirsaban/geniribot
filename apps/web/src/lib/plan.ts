@@ -1,6 +1,19 @@
 import "server-only";
-import { effectivePlan, planHasFeature, planLimits, type Feature, type PlanId } from "@kesher/billing";
+import {
+  effectivePlan,
+  loadPlanCatalog,
+  planHasFeature,
+  planLimits,
+  type Feature,
+  type Plan,
+  type PlanId,
+} from "@kesher/billing";
 import { prisma } from "@kesher/db";
+
+/** The live plan catalog (static defaults + any super-admin overrides). */
+export async function getPlanCatalog(): Promise<Record<PlanId, Plan>> {
+  return loadPlanCatalog(prisma);
+}
 
 /**
  * The plan actually in effect for an org right now. `Organization.plan` is a
@@ -31,9 +44,10 @@ export async function requireFeature(orgId: string, feature: Feature): Promise<b
 }
 
 export async function contactsLimitReached(orgId: string): Promise<boolean> {
-  const [plan, count] = await Promise.all([
+  const [plan, catalog, count] = await Promise.all([
     effectivePlanForOrg(orgId),
+    getPlanCatalog(),
     prisma.contact.count({ where: { organizationId: orgId } }),
   ]);
-  return count >= planLimits(plan).contacts;
+  return count >= planLimits(plan, catalog).contacts;
 }

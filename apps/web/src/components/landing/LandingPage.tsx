@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { LogoMark } from "@/components/Logo";
 import { growPaymentUrl } from "@/lib/billing";
 import { he } from "@/lib/he";
+import { getPlanCatalog } from "@/lib/plan";
 import { landing } from "./copy";
 import { Pricing } from "./Pricing";
 import { Reveal } from "./Reveal";
@@ -276,7 +278,7 @@ function Features() {
 
 /* ---------------- pricing ---------------- */
 async function Pricingsection() {
-  const paymentUrl = await growPaymentUrl();
+  const [paymentUrl, plans] = await Promise.all([growPaymentUrl(), getPlanCatalog()]);
   return (
     <section id="pricing" className="relative z-10 mx-auto max-w-6xl px-5 py-24">
       <SectionHead
@@ -285,7 +287,7 @@ async function Pricingsection() {
         subtitle={landing.pricing.subtitle}
       />
       <div className="mt-14">
-        <Pricing paymentUrl={paymentUrl} />
+        <Pricing paymentUrl={paymentUrl} plans={plans} />
       </div>
     </section>
   );
@@ -410,9 +412,7 @@ function Logo({ small }: { small?: boolean }) {
     <span
       className={`flex ${size} items-center justify-center rounded-lg bg-gradient-to-br from-cyan-300 to-sky-500 text-slate-950 shadow-[0_0_20px_-6px_rgba(34,211,238,0.9)]`}
     >
-      <svg viewBox="0 0 24 24" className="h-1/2 w-1/2" fill="currentColor">
-        <path d="M12 2a10 10 0 0 0-8.7 15l-1.2 4.4a.8.8 0 0 0 1 1l4.5-1.2A10 10 0 1 0 12 2Zm0 3a1.3 1.3 0 1 1 0 2.6A1.3 1.3 0 0 1 12 5Zm2 12h-4a1 1 0 0 1 0-2h.5v-3H10a1 1 0 0 1 0-2h1.5a1 1 0 0 1 1 1v4h.5a1 1 0 0 1 0 2Z" />
-      </svg>
+      <LogoMark className="h-1/2 w-1/2" />
     </span>
   );
 }

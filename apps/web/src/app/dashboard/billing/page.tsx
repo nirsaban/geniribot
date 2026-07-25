@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { PLANS, type PlanId } from "@kesher/billing";
+import { type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { PageHeader } from "@/components/ui";
 import { he } from "@/lib/he";
-import { effectivePlanForOrg } from "@/lib/plan";
+import { effectivePlanForOrg, getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 import { checkoutAction } from "./actions";
 
@@ -14,15 +14,21 @@ const ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ paid?: string; pending?: string; welcome?: string }>;
+  searchParams: Promise<{
+    paid?: string;
+    pending?: string;
+    welcome?: string;
+    claimed?: string;
+    claimFailed?: string;
+  }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { paid, pending, welcome } = await searchParams;
+  const { paid, pending, welcome, claimed, claimFailed } = await searchParams;
 
   const org = await prisma.organization.findUnique({ where: { id: session.org } });
   if (!org) redirect("/login");
-  const current = await effectivePlanForOrg(session.org);
+  const [current, catalog] = await Promise.all([effectivePlanForOrg(session.org), getPlanCatalog()]);
   const firstTime = !org.onboardedAt;
 
   // A first-time tenant who just paid continues straight to setup.
@@ -33,16 +39,22 @@ export default async function BillingPage({
       <PageHeader
         title={welcome || firstTime ? he.choosePlanTitle : he.billingTitle}
         subtitle={
-          welcome || firstTime ? he.choosePlanSubtitle : `${he.currentPlan}: ${PLANS[current].name}`
+          welcome || firstTime ? he.choosePlanSubtitle : `${he.currentPlan}: ${catalog[current].name}`
         }
       />
 
       {paid && <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">התשלום התקבל, המסלול עודכן ✅</div>}
       {pending && <div className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">בקשת השדרוג התקבלה. נציג יאשר את המנוי בקרוב 🙌</div>}
+      {claimed && <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{he.thankYouClaimedBody}</div>}
+      {claimFailed && (
+        <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+          לא מצאנו תשלום תואם. ודא/י שהזנת את אותו טלפון/אימייל שבו שילמת ב-Grow.
+        </div>
+      )}
 
       <div className="grid gap-5 sm:grid-cols-3">
         {ORDER.map((id) => {
-          const plan = PLANS[id];
+          const plan = catalog[id];
           const isCurrent = id === current;
           const featured = id === "STARTER";
           return (

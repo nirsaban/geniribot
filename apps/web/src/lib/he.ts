@@ -65,6 +65,13 @@ export const he = {
   copyLink: "העתק",
   platformGrow: "הגדרות תשלום (Grow) — פלטפורמה",
   platformGrowDesc: "מפתחות Grow ברמת הפלטפורמה. רק אתה (מנהל-על) רואה זאת. לקוחות אינם נחשפים לתשלום.",
+  planConfigTitle: "מחירים ומגבלות למסלולים",
+  planConfigDesc: "כל שינוי כאן משפיע בו-זמנית על דף הנחיתה, עמוד בחירת המסלול, ואכיפת המגבלות בפועל.",
+  planConfigPriceMonthly: "מחיר חודשי (₪)",
+  planConfigPriceAnnual: "מחיר שנתי (₪)",
+  planConfigConnections: "מספרי וואטסאפ",
+  planConfigContacts: "לידים",
+  planConfigMessages: "הודעות בחודש",
   platformPaymentUrl: "קישור לעמוד תשלום (Grow)",
   platformPaymentUrlDesc: "הקישור לעמוד התשלום הסטטי שהוקם ב-Grow (עם שני המסלולים). דף הנחיתה ועמוד \"בחירת מסלול\" מפנים לכאן כל עוד החיוב האוטומטי דרך ה-API לא מוגדר.",
   platformPaymentUrlPlaceholder: "https://pay.grow.link/...",
@@ -288,6 +295,13 @@ export const he = {
   thankYouBody: "תודה שבחרת ב-GeniriBot! נשאר רק שלב אחד — פתיחת חשבון כדי להתחיל להקים את הבוט.",
   thankYouCta: "צור/י חשבון",
   thankYouHaveAccount: "כבר יש לך חשבון?",
+  thankYouClaimedBody: "מצאנו את התשלום שלך והמסלול הופעל בחשבון ✅",
+  thankYouNotFoundBody:
+    "התשלום התקבל אצל Grow, אבל עדיין לא מצאנו אותו בחשבון שלך. הזן/י את הטלפון או האימייל שאיתו שילמת:",
+  thankYouTryMatch: "חפש/י תשלום",
+  thankYouGoToDashboard: "לדשבורד",
+  claimPaymentLabel: "טלפון או אימייל ששילמת איתו (אופציונלי)",
+  claimPaymentHint: "שילמת דרך עמוד התשלום לפני שפתחת חשבון? נשייך את התשלום אוטומטית.",
 
   // secrets (secure paste)
   secretsTitle: "מפתחות סודיים (Grow)",

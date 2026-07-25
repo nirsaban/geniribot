@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { hasRole, type Role } from "@kesher/core";
 import { prisma } from "@kesher/db";
+import { LogoMark } from "@/components/Logo";
 import { MobileNav } from "@/components/MobileNav";
 import { Sidebar } from "@/components/Sidebar";
 import { he } from "@/lib/he";
@@ -37,8 +38,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* Sidebar (right side in RTL) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-line bg-white md:flex">
         <div className="flex items-center gap-2.5 px-5 py-5">
-          <span className="logo-3d grid h-10 w-10 place-items-center rounded-xl text-lg font-black text-white">
-            G
+          <span className="logo-3d grid h-10 w-10 place-items-center rounded-xl text-white">
+            <LogoMark className="h-6 w-6" />
           </span>
           <div>
             <div className="gradient-text text-base font-black leading-none">{he.appName}</div>

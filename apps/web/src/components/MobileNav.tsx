@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { LogoMark } from "@/components/Logo";
 import { he } from "@/lib/he";
 import { Sidebar } from "./Sidebar";
 
@@ -74,8 +75,8 @@ export function MobileNav({
           >
             <div className="flex items-center justify-between px-5 py-5">
               <div className="flex items-center gap-2.5">
-                <span className="logo-3d grid h-10 w-10 place-items-center rounded-xl text-lg font-black text-white">
-                  G
+                <span className="logo-3d grid h-10 w-10 place-items-center rounded-xl text-white">
+                  <LogoMark className="h-6 w-6" />
                 </span>
                 <div>
                   <div className="gradient-text text-base font-black leading-none">{he.appName}</div>

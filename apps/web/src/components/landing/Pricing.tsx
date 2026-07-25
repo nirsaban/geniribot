@@ -2,13 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PLANS, type BillingInterval, type PlanId } from "@kesher/billing";
+import type { BillingInterval, Plan, PlanId } from "@kesher/billing";
 import { landing } from "./copy";
 
 const ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 const c = landing.pricing;
 
-export function Pricing({ paymentUrl }: { paymentUrl: string }) {
+export function Pricing({
+  paymentUrl,
+  plans,
+}: {
+  paymentUrl: string;
+  plans: Record<PlanId, Plan>;
+}) {
   const [interval, setInterval] = useState<BillingInterval>("MONTHLY");
   const annual = interval === "ANNUAL";
 
@@ -37,7 +43,7 @@ export function Pricing({ paymentUrl }: { paymentUrl: string }) {
 
       <div className="grid gap-6 md:grid-cols-3">
         {ORDER.map((id) => {
-          const plan = PLANS[id];
+          const plan = plans[id];
           const featured = id === "STARTER";
           const isFree = id === "FREE";
           const price = isFree ? 0 : annual ? plan.annualIls : plan.priceIls;

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { PLANS, planPrice, type BillingInterval, type PlanId } from "@kesher/billing";
+import { planPrice, type BillingInterval, type PlanId } from "@kesher/billing";
 import { withBase } from "@/lib/basePath";
 import { growPlatformProvider } from "@/lib/billing";
+import { getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,8 @@ export async function POST(req: Request) {
     plan?: PlanId;
     interval?: string;
   };
-  if (!orgId || !plan || !(plan in PLANS)) {
+  const catalog = await getPlanCatalog();
+  if (!orgId || !plan || !(plan in catalog)) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
   const interval: BillingInterval = rawInterval === "ANNUAL" ? "ANNUAL" : "MONTHLY";
@@ -29,8 +31,8 @@ export async function POST(req: Request) {
     const { url } = await provider.createCheckout({
       plan,
       interval,
-      sumIls: planPrice(plan, interval),
-      description: `GeniriBot — מסלול ${PLANS[plan].name}`,
+      sumIls: planPrice(plan, interval, catalog),
+      description: `GeniriBot — מסלול ${catalog[plan].name}`,
       organizationId: orgId,
       notifyUrl: `${base}${withBase("/api/billing/grow/webhook")}`,
       successUrl: `${base}${withBase("/dashboard/billing?paid=1")}`,
