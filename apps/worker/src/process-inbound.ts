@@ -33,8 +33,22 @@ const HOUR = 3600 * 1000;
 const LOOP_WINDOW_MS = 60_000;
 const LOOP_MAX_REPLIES = 8;
 
-/** Quiet period required before a finished flow will restart itself. */
-const RESTART_COOLDOWN_MS = 60_000;
+/**
+ * Quiet period required before a finished flow will restart itself.
+ *
+ * A minute was nowhere near enough. A lead who finished the flow — booked the
+ * meeting, got the confirmation — and then wrote one more human line ("הבנתי",
+ * "תודה") two minutes later was answered with the opening question all over
+ * again, and every reply after that walked them through the whole script a
+ * second time. From the outside the bot simply never stops.
+ *
+ * Once the script has run to the end, the conversation belongs to a person.
+ * Anything the lead writes inside this window is filed on the finished
+ * conversation for the dashboard and gets no bot reply. A keyword trigger is
+ * exempt (see below): that is the lead explicitly asking to start over.
+ */
+const RESTART_COOLDOWN_MS =
+  Number(process.env.RESTART_COOLDOWN_HOURS ?? 12) * HOUR;
 
 const log = childLogger("worker:inbound");
 
@@ -149,13 +163,39 @@ export async function processInbound(job: InboundJob): Promise<void> {
     const previous = await prisma.conversation.findFirst({
       where: { organizationId, contactId: contact.id },
       orderBy: { lastMessageAt: "desc" },
-      select: { id: true, lastMessageAt: true },
+      select: { id: true, lastMessageAt: true, status: true },
     });
-    if (previous && previous.lastMessageAt.getTime() > Date.now() - RESTART_COOLDOWN_MS) {
+    // A keyword is the lead deliberately asking for that flow, so it always
+    // restarts — the cooldown only governs the automatic (trigger-matched)
+    // restart, which is the one that reads as the bot talking to itself.
+    if (
+      !keywordFlow &&
+      previous &&
+      previous.lastMessageAt.getTime() > Date.now() - RESTART_COOLDOWN_MS
+    ) {
       log.warn(
-        { contactId: contact.id, previousConversationId: previous.id },
-        "flow finished moments ago — not restarting (loop guard)",
+        {
+          contactId: contact.id,
+          previousConversationId: previous.id,
+          previousStatus: previous.status,
+        },
+        "flow already ran for this contact — not restarting (loop guard)",
       );
+      // Silence would lose the message. File it on the conversation it belongs
+      // to so it shows up in the dashboard for a human to answer, and let its
+      // timestamp slide the window: while a person is still talking to the
+      // lead, the bot must not cut in with the script.
+      await prisma.message.create({
+        data: { conversationId: previous.id, direction: "IN", body: text },
+      });
+      await prisma.conversation.update({
+        where: { id: previous.id },
+        data: { lastMessageAt: new Date() },
+      });
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: { lastContactedAt: new Date() },
+      });
       return;
     }
 
@@ -220,6 +260,63 @@ export async function processInbound(job: InboundJob): Promise<void> {
     return;
   }
 
+  // The other half of the restart guard: a *duplicate* conversation.
+  //
+  // The check above only runs when this contact has no ACTIVE conversation. It
+  // cannot see the rows the old one-minute cooldown already let through — a
+  // second conversation opened after the lead had finished the script, still
+  // sitting mid-flow. Nothing restarts those, so they never trip a restart
+  // guard; the lead's next message simply resumes the replay and walks them to
+  // a second booking link. From the outside that is the bot messaging someone
+  // who already finished.
+  //
+  // A conversation the lead opened themselves with a keyword is exempt for the
+  // same reason a keyword restart is: they asked for it. That is decided by the
+  // message the conversation actually began with, not by the current one — the
+  // reply to the bot's first question is never itself a keyword.
+  if (!keywordFlow) {
+    const finishedRun = await prisma.conversation.findFirst({
+      where: {
+        organizationId,
+        contactId: contact.id,
+        id: { not: convo.id },
+        status: { in: ["COMPLETED", "HANDOFF"] },
+        lastMessageAt: {
+          lt: convo.createdAt,
+          gt: new Date(Date.now() - RESTART_COOLDOWN_MS),
+        },
+      },
+      orderBy: { lastMessageAt: "desc" },
+      select: { id: true },
+    });
+    if (finishedRun) {
+      const opener = await prisma.message.findFirst({
+        where: { conversationId: convo.id, direction: "IN" },
+        orderBy: { createdAt: "asc" },
+        select: { body: true },
+      });
+      const startedByKeyword =
+        triggerSpecificity(flow.trigger) === 1 && matchesTrigger(flow.trigger, opener?.body ?? "");
+      if (!startedByKeyword) {
+        log.warn(
+          {
+            contactId: contact.id,
+            conversationId: convo.id,
+            finishedConversationId: finishedRun.id,
+          },
+          "duplicate conversation on a contact who already finished — not resuming the flow",
+        );
+        // The message itself was stored above, so the lead's question is on the
+        // timeline; HANDOFF is what puts it in front of a person.
+        await prisma.conversation.update({
+          where: { id: convo.id },
+          data: { status: "HANDOFF", lastMessageAt: new Date() },
+        });
+        return;
+      }
+    }
+  }
+
   const prevState = convo.state as unknown as Partial<FlowState>;
 
   // Branch 1: paused for a booking slot choice.
@@ -240,6 +337,27 @@ export async function processInbound(job: InboundJob): Promise<void> {
     prevState.currentNodeId === undefined ||
     prevState.currentNodeId === null ||
     prevState.status === "completed";
+
+  // Second way back to the top of the script: a row still marked ACTIVE whose
+  // state says the run already ended (rows written before persist() started
+  // deriving the status from the engine, or a completed run reopened by a
+  // concurrent job). Restarting there replays the flow just as visibly as the
+  // path above, so it gets the same answer — close the row and leave the lead
+  // to a human. A keyword still restarts.
+  if (finished && !keywordFlow && (prevState?.status === "completed" || prevState?.status === "handoff")) {
+    log.warn(
+      { contactId: contact.id, conversationId: convo.id, state: prevState.status },
+      "message on an already-finished run — not replaying the flow",
+    );
+    await prisma.conversation.update({
+      where: { id: convo.id },
+      data: {
+        status: prevState.status === "handoff" ? "HANDOFF" : "COMPLETED",
+        lastMessageAt: new Date(),
+      },
+    });
+    return;
+  }
 
   const result = finished ? start(flow) : step(flow, normalizeState(prevState), { text });
   await applyAndPersist(flow, result, ctx);

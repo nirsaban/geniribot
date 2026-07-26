@@ -81,7 +81,31 @@ export async function processFollowUps(now: Date = new Date()): Promise<void> {
       take: 50, // per-sweep safety cap; the next sweep picks up the rest
     });
 
+    // Never chase a lead whose script already ran to the end.
+    //
+    // `status` above cannot answer this: it is the pipeline stage, advanced by
+    // agents and never by the bot, so a lead who finished the flow — including
+    // one who booked a meeting — is still sitting in NEW/CONTACTED/QUALIFIED.
+    // Selecting on silence alone therefore sends "I saw we didn't finish the
+    // conversation" to exactly the people who did finish it, twice, hours after
+    // they were handed a booking link.
+    //
+    // The most recent conversation is the one that decides: an older completed
+    // run followed by a fresh one the lead dropped is still worth a nudge.
+    const finished = new Set<string>();
+    const seen = new Set<string>();
+    for (const c of await prisma.conversation.findMany({
+      where: { contactId: { in: due.map((d) => d.id) } },
+      orderBy: { lastMessageAt: "desc" },
+      select: { contactId: true, status: true },
+    })) {
+      if (seen.has(c.contactId)) continue; // first row per contact = most recent
+      seen.add(c.contactId);
+      if (c.status === "COMPLETED" || c.status === "HANDOFF") finished.add(c.contactId);
+    }
+
     for (const contact of due) {
+      if (finished.has(contact.id)) continue;
       const text = renderTemplate(org.followUpMessage || DEFAULT_MESSAGE, contact.name);
       await outboundQueue.add(OUTBOUND_JOB, {
         organizationId: org.id,
