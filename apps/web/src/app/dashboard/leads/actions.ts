@@ -3,9 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hasRole, type Role } from "@kesher/core";
-import { logActivity, prisma, type LeadStatus } from "@kesher/db";
+import { logActivity, prisma, type LeadStatus, type Prisma } from "@kesher/db";
 import { getSession } from "@/lib/session";
-import { LEAD_STATUSES, leadVisibility } from "@/lib/leads";
+import {
+  FIELD_INPUT,
+  fieldInputValue,
+  LEAD_STATUSES,
+  leadVisibility,
+  parseFieldInput,
+  schemaOf,
+} from "@/lib/leads";
 
 async function requireSession() {
   const session = await getSession();
@@ -125,6 +132,76 @@ export async function saveSummaryAction(formData: FormData): Promise<void> {
     kind: "SUMMARY_SAVED",
     // The body lives on the contact; the timeline only records that it changed.
     meta: { cleared: summary === "" },
+  });
+  refresh(lead.id);
+}
+
+/**
+ * Correct the answers the bot collected.
+ *
+ * Leads mistype, and the bot records whatever it was told, so the CRM has to be
+ * able to fix a value without a developer editing JSON. Everything is written
+ * back through the scenario's field schema: a choice question can only take one
+ * of its declared options, a number question stores a number, and no key that
+ * the scenario never declared (and the lead does not already carry) can be
+ * introduced — the input names come from the client, so the allowed set is
+ * decided here rather than trusted from the form.
+ */
+export async function saveFieldsAction(formData: FormData): Promise<void> {
+  const session = await requireSession();
+  const id = String(formData.get("id") ?? "");
+  const lead = await ownLead(session, id);
+
+  const flow = lead.sourceFlowId
+    ? await prisma.flow.findFirst({
+        where: { id: lead.sourceFlowId, organizationId: session.org },
+        select: { definition: true, fieldSchema: true },
+      })
+    : null;
+  const specs = flow ? schemaOf(flow) : [];
+  const byKey = new Map(specs.map((s) => [s.key, s]));
+
+  const before = (lead.fields as Record<string, unknown>) ?? {};
+  const after: Record<string, unknown> = { ...before };
+  const changed: string[] = [];
+
+  for (const key of new Set([...byKey.keys(), ...Object.keys(before)])) {
+    const raw = formData.get(FIELD_INPUT + key);
+    if (typeof raw !== "string") continue; // not on the form — left untouched
+    const spec = byKey.get(key);
+
+    // "Did the agent touch this?" is answered against what the form showed, not
+    // against the stored value: a date is rendered as yyyy-mm-dd and anything
+    // structured as JSON, so comparing to the stored value would read every
+    // untouched field as an edit and rewrite it — quietly dropping the time off
+    // a date, and flattening an object into a string, just for pressing save.
+    if (raw.trim() === fieldInputValue(spec, before[key])) continue;
+
+    const next = parseFieldInput(spec, raw);
+
+    // A choice may only become one the scenario offers. The stale value a
+    // since-edited scenario left behind is still valid data, but it is offered
+    // as the current selection, so keeping it lands above as "untouched".
+    if (spec?.choices?.length && next !== null && !spec.choices.includes(String(next))) continue;
+
+    if (next === null) delete after[key];
+    else after[key] = next;
+    changed.push(key);
+  }
+  if (changed.length === 0) return;
+
+  await prisma.contact.update({
+    where: { id: lead.id },
+    data: { fields: after as Prisma.InputJsonValue },
+  });
+  await logActivity({
+    organizationId: session.org,
+    contactId: lead.id,
+    userId: session.sub,
+    kind: "FIELDS_UPDATED",
+    // The values live on the contact; the timeline records which answers moved.
+    toValue: changed.map((k) => byKey.get(k)?.label ?? k).join(", "),
+    meta: { keys: changed },
   });
   refresh(lead.id);
 }

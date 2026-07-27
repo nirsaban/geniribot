@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   buildLeadWhere,
   callbackPhone,
+  choiceOptions,
+  fieldInputType,
+  fieldInputValue,
   formatFieldValue,
   isHiddenNumber,
   leadVisibility,
+  parseFieldInput,
   STALE_DAYS,
+  suggestionsByField,
   toCsv,
 } from "./leads";
 import type { FieldSpec } from "@kesher/flow-engine";
@@ -231,5 +236,70 @@ describe("toCsv", () => {
 
   it("leaves ordinary text untouched", () => {
     expect(toCsv(["שם"], [["דנה"]])).toBe("﻿שם\r\nדנה");
+  });
+});
+
+describe("editing collected fields", () => {
+  it("offers the scenario's choices, keeping a value it no longer declares", () => {
+    const s = spec({ expect: "choice", choices: ["S", "L"] });
+    expect(choiceOptions(s, "S")).toEqual(["S", "L"]);
+    // A since-edited scenario must not silently drop the lead's real answer.
+    expect(choiceOptions(s, "XL")).toEqual(["XL", "S", "L"]);
+    expect(choiceOptions(s, undefined)).toEqual(["S", "L"]);
+  });
+
+  it("renders a date as yyyy-mm-dd so the input keeps it", () => {
+    expect(fieldInputValue(spec({ expect: "date" }), "2026-03-04T10:00:00.000Z")).toBe("2026-03-04");
+    expect(fieldInputValue(spec({ expect: "date" }), "not a date")).toBe("not a date");
+    expect(fieldInputValue(spec(), null)).toBe("");
+  });
+
+  it("parses a number field to a number, keeping unparseable text as typed", () => {
+    const n = spec({ expect: "number" });
+    expect(parseFieldInput(n, " 1,500 ")).toBe(1500);
+    expect(parseFieldInput(n, "בערך 5000")).toBe("בערך 5000");
+    expect(parseFieldInput(spec(), " דנה ")).toBe("דנה");
+  });
+
+  it("reports a cleared field as null so the key can be dropped", () => {
+    expect(parseFieldInput(spec(), "   ")).toBeNull();
+  });
+
+  it("edits an answer a typed input cannot show as plain text instead", () => {
+    // A number/date input blanks whatever it cannot parse, and the blank would
+    // be saved back as "cleared" — losing the answer the lead actually gave.
+    expect(fieldInputType(spec({ expect: "number" }), 5000)).toBe("number");
+    expect(fieldInputType(spec({ expect: "number" }), "בערך 5000")).toBe("text");
+    expect(fieldInputType(spec({ expect: "date" }), "2026-03-04T10:00:00.000Z")).toBe("date");
+    expect(fieldInputType(spec({ expect: "date" }), "אחרי החגים")).toBe("text");
+    // Empty is representable, so an unanswered question keeps its typed keypad.
+    expect(fieldInputType(spec({ expect: "number" }), null)).toBe("number");
+    // These two only flag a bad value, they never swallow it.
+    expect(fieldInputType(spec({ expect: "email" }), "not-an-email")).toBe("email");
+    expect(fieldInputType(spec({ expect: "phone" }), "050 בבית")).toBe("tel");
+  });
+
+  it("renders a value the form can round-trip, so an untouched field is unchanged", () => {
+    // saveFieldsAction decides "did the agent touch this?" by comparing the
+    // submitted text to fieldInputValue of the stored value — so these have to
+    // agree, or merely pressing save would rewrite answers nobody edited.
+    const d = spec({ expect: "date" });
+    expect(fieldInputValue(d, "2026-03-04")).toBe("2026-03-04");
+    expect(fieldInputValue(spec(), { nested: true })).toBe('{"nested":true}');
+    expect(fieldInputValue(spec({ expect: "number" }), 1500)).toBe("1500");
+  });
+
+  it("suggests what other leads answered, deduped and without prose", () => {
+    const rows = [
+      { fields: { city: "חיפה", note: "x".repeat(80) } },
+      { fields: { city: "ראש פינה" } },
+      { fields: { city: "חיפה" } },
+      { fields: null },
+      { fields: { city: { nested: true } } },
+    ];
+    const got = suggestionsByField(rows, ["city", "note", "absent"]);
+    expect(got.get("city")).toEqual(["חיפה", "ראש פינה"]);
+    expect(got.get("note")).toEqual([]);
+    expect(got.get("absent")).toEqual([]);
   });
 });

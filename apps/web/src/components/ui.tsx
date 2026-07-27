@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 export function PageHeader({
   title,
@@ -85,6 +85,35 @@ export function Badge({
   tone?: "brand" | "gray" | "green" | "amber" | "red";
 }) {
   return <span className={`badge-${tone}`}>{children}</span>;
+}
+
+/**
+ * A `<select>` whose selection follows the value on the server.
+ *
+ * React applies an uncontrolled select's `defaultValue` only when the element
+ * mounts; on every later render it re-asserts the value the select held at
+ * mount time. So after a server action re-renders the page the box snaps back
+ * to what it showed before the change — the agent moves a lead to "מתאים",
+ * saves, and the control still reads "חדש" even though the lead really did
+ * move. (Text inputs escape this: the browser's own dirty flag keeps what was
+ * typed, which is why only dropdowns misbehaved.)
+ *
+ * Keying on the server's value remounts the select exactly when that value
+ * changes, and only then — so a pick the agent has not saved yet still
+ * survives an unrelated save elsewhere on the page.
+ */
+export function ServerSelect({
+  value,
+  children,
+  ...rest
+}: Omit<ComponentPropsWithoutRef<"select">, "value" | "defaultValue"> & {
+  value: string;
+}) {
+  return (
+    <select key={value} defaultValue={value} {...rest}>
+      {children}
+    </select>
+  );
 }
 
 export function LinkButton({
