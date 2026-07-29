@@ -172,6 +172,11 @@ model Subscription {
   /** Grow process/token identifiers for reconciliation (no card data stored here). */
   growProcessId  String?
   growAsmachta   String?
+  /** Grow's saved-card token (opaque, from saveCardToken) — lets the super-admin charge an arbitrary amount later with no payment page/link. */
+  growCardToken  String?
+  /** Cached from the checkout callback — createTransactionWithToken requires fullName+phone on every token charge, not just the token itself. */
+  growCardHolderName  String?
+  growCardHolderPhone String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

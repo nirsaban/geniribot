@@ -18,6 +18,7 @@ import {
   savePlatformPaymentUrlAction,
   setOrgPlanAction,
 } from "./actions";
+import { ChargeOrg } from "./ChargeOrg";
 import { MetaSecrets } from "./MetaSecrets";
 import { PaymentLink } from "./PaymentLink";
 
@@ -34,16 +35,19 @@ export default async function AdminPage() {
   const orgs = await prisma.organization.findMany({
     where: { slug: { not: "platform" } },
     orderBy: { createdAt: "desc" },
-    include: { _count: { select: { users: true, contacts: true } } },
+    include: {
+      _count: { select: { users: true, contacts: true } },
+      subscription: { select: { growCardToken: true } },
+    },
   });
   const usersCount = await prisma.user.count({ where: { isSuperAdmin: false } });
   const paidCount = orgs.filter((o) => o.plan !== "FREE").length;
 
-  const [pageCodeMask, userIdMask, apiKeyMask] = platformId
+  const [createCheckoutMask, verifyMask, chargeTokenMask] = platformId
     ? await Promise.all([
-        secretMask(platformId, GROW_SECRETS.pageCode),
-        secretMask(platformId, GROW_SECRETS.userId),
-        secretMask(platformId, GROW_SECRETS.apiKey),
+        secretMask(platformId, GROW_SECRETS.createCheckoutWebhookUrl),
+        secretMask(platformId, GROW_SECRETS.verifyWebhookUrl),
+        secretMask(platformId, GROW_SECRETS.chargeTokenWebhookUrl),
       ])
     : [null, null, null];
 
@@ -113,6 +117,7 @@ export default async function AdminPage() {
                           ))}
                         </div>
                         <PaymentLink orgId={o.id} />
+                        <ChargeOrg orgId={o.id} hasSavedCard={Boolean(o.subscription?.growCardToken)} />
                       </div>
                     </td>
                   </tr>
@@ -182,9 +187,9 @@ export default async function AdminPage() {
         <p className="mb-3 text-sm text-slate-500">{he.platformGrowDesc}</p>
         <Card>
           <GrowSecrets
-            pageCodeMask={pageCodeMask}
-            userIdMask={userIdMask}
-            apiKeyMask={apiKeyMask}
+            createCheckoutMask={createCheckoutMask}
+            verifyMask={verifyMask}
+            chargeTokenMask={chargeTokenMask}
             saveAction={savePlatformGrowAction}
             removeAction={removePlatformGrowAction}
           />

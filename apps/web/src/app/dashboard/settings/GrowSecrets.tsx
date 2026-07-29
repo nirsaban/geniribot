@@ -1,20 +1,21 @@
 import { he } from "@/lib/he";
 
 /**
- * Secure "paste your Grow keys" form. Renders masked status of already-saved
- * secrets (never the real value) and inputs to set/replace them. Server actions
- * (passed in) encrypt on save. Used by the super-admin panel (platform creds).
+ * Secure "paste your Make webhook URLs" form. Renders masked status of
+ * already-saved secrets (never the real value) and inputs to set/replace
+ * them. Server actions (passed in) encrypt on save. Used by the super-admin
+ * panel (platform creds) and the per-tenant dashboard settings.
  */
 export function GrowSecrets({
-  pageCodeMask,
-  userIdMask,
-  apiKeyMask,
+  createCheckoutMask,
+  verifyMask,
+  chargeTokenMask,
   saveAction,
   removeAction,
 }: {
-  pageCodeMask: string | null;
-  userIdMask: string | null;
-  apiKeyMask: string | null;
+  createCheckoutMask: string | null;
+  verifyMask: string | null;
+  chargeTokenMask: string | null;
   saveAction: (formData: FormData) => Promise<void>;
   removeAction: () => Promise<void>;
 }) {
@@ -39,9 +40,9 @@ export function GrowSecrets({
       </details>
 
       <form action={saveAction} className="space-y-3">
-        <Field label={he.growPageCode} name="page_code" status={status(pageCodeMask)} />
-        <Field label={he.growUserId} name="user_id" status={status(userIdMask)} />
-        <Field label={he.growApiKey} name="api_key" status={status(apiKeyMask)} />
+        <Field label={he.growCreateCheckoutUrl} name="create_checkout_url" status={status(createCheckoutMask)} />
+        <Field label={he.growVerifyUrl} name="verify_url" status={status(verifyMask)} />
+        <Field label={he.growChargeTokenUrl} name="charge_token_url" status={status(chargeTokenMask)} />
         <div className="flex items-center gap-2">
           <button className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark">
             🔒 {he.saveSecret}
@@ -49,7 +50,7 @@ export function GrowSecrets({
         </div>
       </form>
 
-      {(pageCodeMask || userIdMask || apiKeyMask) && (
+      {(createCheckoutMask || verifyMask || chargeTokenMask) && (
         <form action={removeAction} className="mt-2">
           <button className="text-xs text-red-600 hover:underline">{he.removeSecret}</button>
         </form>
@@ -77,7 +78,7 @@ function Field({
         name={name}
         type="password"
         autoComplete="off"
-        placeholder="••••••••"
+        placeholder="https://hook.eu2.make.com/••••••••"
         dir="ltr"
         className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-left outline-none focus:border-brand"
       />

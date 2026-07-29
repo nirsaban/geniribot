@@ -12,26 +12,26 @@ export async function platformOrgId(): Promise<string | null> {
   return o?.id ?? null;
 }
 
-/** Grow secret names as stored in the per-org Secret store. */
+/** Grow-via-Make webhook URLs, as stored in the per-org Secret store. */
 export const GROW_SECRETS = {
-  pageCode: "grow_page_code",
-  userId: "grow_user_id",
-  apiKey: "grow_api_key",
+  createCheckoutWebhookUrl: "grow_make_create_checkout_webhook_url",
+  /** Wraps Grow's getPaymentProcessInfo + approveTransaction in one scenario. */
+  verifyWebhookUrl: "grow_make_verify_webhook_url",
+  chargeTokenWebhookUrl: "grow_make_charge_token_webhook_url",
 } as const;
 
-/** Build the tenant's Grow config from their pasted secrets, or null. */
+/** Build the tenant's Grow-via-Make config from their pasted webhook URLs, or null. */
 export async function growConfigForOrg(org: string): Promise<GrowConfig | null> {
-  const [pageCode, userId, apiKey] = await Promise.all([
-    getSecret(org, GROW_SECRETS.pageCode),
-    getSecret(org, GROW_SECRETS.userId),
-    getSecret(org, GROW_SECRETS.apiKey),
+  const [createCheckoutWebhookUrl, verifyWebhookUrl, chargeTokenWebhookUrl] = await Promise.all([
+    getSecret(org, GROW_SECRETS.createCheckoutWebhookUrl),
+    getSecret(org, GROW_SECRETS.verifyWebhookUrl),
+    getSecret(org, GROW_SECRETS.chargeTokenWebhookUrl),
   ]);
-  if (!pageCode || !userId) return null;
+  if (!createCheckoutWebhookUrl || !verifyWebhookUrl) return null;
   return {
-    pageCode,
-    userId,
-    apiKey: apiKey ?? undefined,
-    sandbox: process.env.GROW_SANDBOX === "1",
+    createCheckoutWebhookUrl,
+    verifyWebhookUrl,
+    chargeTokenWebhookUrl: chargeTokenWebhookUrl ?? undefined,
   };
 }
 

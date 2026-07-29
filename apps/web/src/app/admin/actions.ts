@@ -25,13 +25,13 @@ export async function setOrgPlanAction(formData: FormData): Promise<void> {
   revalidatePath("/admin");
 }
 
-/** Save the PLATFORM Grow credentials (stored on the platform org). */
+/** Save the PLATFORM Grow-via-Make webhook URLs (stored on the platform org). */
 export async function savePlatformGrowAction(formData: FormData): Promise<void> {
   const { org } = await requireSuperAdmin();
   const map: Array<[string, string]> = [
-    [GROW_SECRETS.pageCode, String(formData.get("page_code") ?? "").trim()],
-    [GROW_SECRETS.userId, String(formData.get("user_id") ?? "").trim()],
-    [GROW_SECRETS.apiKey, String(formData.get("api_key") ?? "").trim()],
+    [GROW_SECRETS.createCheckoutWebhookUrl, String(formData.get("create_checkout_url") ?? "").trim()],
+    [GROW_SECRETS.verifyWebhookUrl, String(formData.get("verify_url") ?? "").trim()],
+    [GROW_SECRETS.chargeTokenWebhookUrl, String(formData.get("charge_token_url") ?? "").trim()],
   ];
   for (const [name, value] of map) if (value) await setSecret(org, name, value);
   revalidatePath("/admin");

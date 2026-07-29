@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import {
   intervalMonths,
   planAndIntervalFromAmount,
@@ -10,6 +11,7 @@ import {
 } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { normalizePhone } from "./audience";
+import { growPlatformProvider } from "./billing";
 import { getPlanCatalog } from "./plan";
 
 /** Add whole months to a date (clamps to end-of-month naturally via Date). */
@@ -52,6 +54,9 @@ async function activatePlan(
     growTransactionId: string;
     growAsmachta?: string | null;
     growProcessId?: string | null;
+    growCardToken?: string | null;
+    growCardHolderName?: string | null;
+    growCardHolderPhone?: string | null;
     cardSuffix?: string | null;
     cardBrand?: string | null;
     invoiceUrl?: string | null;
@@ -75,6 +80,9 @@ async function activatePlan(
         cancelAtPeriodEnd: false,
         growProcessId: payment.growProcessId ?? null,
         growAsmachta: payment.growAsmachta ?? null,
+        growCardToken: payment.growCardToken ?? null,
+        growCardHolderName: payment.growCardHolderName ?? null,
+        growCardHolderPhone: payment.growCardHolderPhone ?? null,
       },
       update: {
         plan,
@@ -87,6 +95,10 @@ async function activatePlan(
         canceledAt: null,
         growProcessId: payment.growProcessId ?? null,
         growAsmachta: payment.growAsmachta ?? null,
+        // A renewal callback may not repeat the token — keep the one we already have.
+        ...(payment.growCardToken ? { growCardToken: payment.growCardToken } : {}),
+        ...(payment.growCardHolderName ? { growCardHolderName: payment.growCardHolderName } : {}),
+        ...(payment.growCardHolderPhone ? { growCardHolderPhone: payment.growCardHolderPhone } : {}),
       },
     });
 
@@ -146,6 +158,9 @@ export async function applyGrowPayment(cb: GrowCallback): Promise<ApplyResult> {
     growTransactionId: ext,
     growAsmachta: cb.asmachta ?? null,
     growProcessId: cb.processId ?? null,
+    growCardToken: cb.cardToken ?? null,
+    growCardHolderName: cb.fullName ?? null,
+    growCardHolderPhone: cb.payerPhone ?? null,
     cardSuffix: cb.cardSuffix ?? null,
     cardBrand: cb.cardBrand ?? null,
     invoiceUrl: cb.invoiceUrl ?? null,
@@ -223,4 +238,60 @@ export async function claimUnclaimedPayment(orgId: string, identifier: string): 
     paidAt: match.paidAt,
   });
   return { applied: true };
+}
+
+export interface ChargeOrgResult {
+  ok: boolean;
+  error?: "not_configured" | "no_saved_card" | "charge_failed";
+  transactionId?: string;
+}
+
+/**
+ * Super-admin: charge an org's previously-saved Grow card token for an
+ * arbitrary amount — no payment page/link is shown to the customer. Requires
+ * the org to have completed at least one checkout (which saves the token) and
+ * the platform's chargeToken webhook to be configured.
+ */
+export async function chargeOrgCardToken(
+  orgId: string,
+  sumIls: number,
+  description: string,
+): Promise<ChargeOrgResult> {
+  const sub = await prisma.subscription.findUnique({
+    where: { organizationId: orgId },
+    select: { id: true, growCardToken: true, growCardHolderName: true, growCardHolderPhone: true },
+  });
+  if (!sub?.growCardToken || !sub.growCardHolderName || !sub.growCardHolderPhone) {
+    return { ok: false, error: "no_saved_card" };
+  }
+
+  const provider = await growPlatformProvider();
+  if (!provider) return { ok: false, error: "not_configured" };
+
+  try {
+    const { transactionId } = await provider.chargeToken({
+      cardToken: sub.growCardToken,
+      sumIls,
+      description,
+      uniqueIdentifier: `admin-charge-${orgId}-${randomUUID()}`,
+      payerName: sub.growCardHolderName,
+      payerPhone: sub.growCardHolderPhone,
+      organizationId: orgId,
+    });
+
+    await prisma.payment.create({
+      data: {
+        organizationId: orgId,
+        subscriptionId: sub.id,
+        amountIls: sumIls,
+        status: "PAID",
+        growTransactionId: transactionId ?? `admin-charge-${randomUUID()}`,
+        paidAt: new Date(),
+      },
+    });
+
+    return { ok: true, transactionId };
+  } catch {
+    return { ok: false, error: "charge_failed" };
+  }
 }

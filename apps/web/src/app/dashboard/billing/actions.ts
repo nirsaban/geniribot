@@ -2,71 +2,35 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { planPrice, type BillingInterval, type PlanId } from "@kesher/billing";
+import { type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
-import { withBase } from "@/lib/basePath";
-import { growPaymentUrl, growPlatformProvider } from "@/lib/billing";
 import { getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 import { claimUnclaimedPayment } from "@/lib/subscriptions";
 
 /**
- * Start a plan change. FREE applies immediately; paid plans go through Grow's
- * recurring payment page — each renewal fires our webhook. Until per-org API
- * checkout is configured, paid plans fall back to the static Grow payment
- * page set in /admin.
+ * Switch to the FREE plan — applies immediately, no payment involved. Paid
+ * plans go through the client-side checkout iframe (see CheckoutButton +
+ * /api/billing/checkout) instead of a server action, since embedding Grow's
+ * payment page requires browser-side postMessage handling.
  */
 export async function checkoutAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
   const catalog = await getPlanCatalog();
   const plan = String(formData.get("plan") ?? "") as PlanId;
-  if (!(plan in catalog)) redirect("/dashboard/billing");
-  const interval: BillingInterval =
-    String(formData.get("interval") ?? "MONTHLY") === "ANNUAL" ? "ANNUAL" : "MONTHLY";
+  if (plan !== "FREE" || !(plan in catalog)) redirect("/dashboard/billing");
 
   const org = await prisma.organization.findUnique({ where: { id: session.org } });
   const firstTime = !org?.onboardedAt;
 
-  if (plan === "FREE") {
-    await prisma.organization.update({ where: { id: session.org }, data: { plan: "FREE" } });
-    await prisma.subscription
-      .updateMany({ where: { organizationId: session.org }, data: { cancelAtPeriodEnd: true } })
-      .catch(() => {});
-    revalidatePath("/dashboard/billing");
-    // First-time tenants continue to setup right after choosing a plan.
-    redirect(firstTime ? "/dashboard/onboarding" : "/dashboard/billing");
-  }
-
-  const provider = await growPlatformProvider();
-  if (!provider) {
-    // API-driven checkout isn't configured yet — send them to the static
-    // Grow payment page instead (super-admin sets it in /admin) rather than
-    // stalling a brand-new tenant's setup. We already know the org here, so
-    // tag the link with our custom fields — IF that page's Grow config
-    // echoes them back, the webhook attributes the payment automatically;
-    // if not, it's harmlessly ignored and falls back to the unclaimed-payment
-    // flow (see subscriptions.ts) once they're back in the app.
-    const url = new URL(await growPaymentUrl());
-    url.searchParams.set("cField1", session.org);
-    url.searchParams.set("cField2", plan);
-    url.searchParams.set("cField3", interval);
-    redirect(url.toString());
-  }
-
-  const base = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";
-  const cycle = interval === "ANNUAL" ? "שנתי" : "חודשי";
-  const { url } = await provider.createCheckout({
-    plan,
-    interval,
-    sumIls: planPrice(plan, interval, catalog),
-    description: `GeniriBot — מסלול ${catalog[plan].name} (${cycle})`,
-    organizationId: session.org,
-    notifyUrl: `${base}${withBase("/api/billing/grow/webhook")}`,
-    successUrl: `${base}${withBase("/dashboard/billing?paid=1")}`,
-    cancelUrl: `${base}${withBase("/dashboard/billing?cancelled=1")}`,
-  });
-  redirect(url);
+  await prisma.organization.update({ where: { id: session.org }, data: { plan: "FREE" } });
+  await prisma.subscription
+    .updateMany({ where: { organizationId: session.org }, data: { cancelAtPeriodEnd: true } })
+    .catch(() => {});
+  revalidatePath("/dashboard/billing");
+  // First-time tenants continue to setup right after choosing a plan.
+  redirect(firstTime ? "/dashboard/onboarding" : "/dashboard/billing");
 }
 
 /**

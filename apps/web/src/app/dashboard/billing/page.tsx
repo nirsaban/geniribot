@@ -6,6 +6,7 @@ import { he } from "@/lib/he";
 import { effectivePlanForOrg, getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 import { checkoutAction } from "./actions";
+import { CheckoutButton } from "./CheckoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -82,13 +83,18 @@ export default async function BillingPage({
               <div className="mt-6">
                 {isCurrent ? (
                   <span className="btn-secondary w-full cursor-default opacity-70">{he.currentPlan}</span>
-                ) : (
+                ) : id === "FREE" ? (
                   <form action={checkoutAction}>
                     <input type="hidden" name="plan" value={id} />
-                    <button className={`w-full ${featured ? "btn-primary" : "btn-secondary"}`}>
-                      {id === "FREE" ? he.choosePlan : he.upgrade}
-                    </button>
+                    <button className="w-full btn-secondary">{he.choosePlan}</button>
                   </form>
+                ) : (
+                  <CheckoutButton
+                    plan={id}
+                    interval="MONTHLY"
+                    label={he.upgrade}
+                    className={`w-full ${featured ? "btn-primary" : "btn-secondary"}`}
+                  />
                 )}
               </div>
             </div>

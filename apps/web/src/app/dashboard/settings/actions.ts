@@ -55,13 +55,13 @@ export async function saveCalcomWebhookSecretAction(formData: FormData): Promise
   revalidatePath("/dashboard/settings");
 }
 
-/** Save pasted Grow secrets (encrypted). Only non-empty fields are updated. */
+/** Save pasted Grow-via-Make webhook URLs (encrypted). Only non-empty fields are updated. */
 export async function saveGrowSecretsAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
   const map: Array<[string, string]> = [
-    [GROW_SECRETS.pageCode, String(formData.get("page_code") ?? "").trim()],
-    [GROW_SECRETS.userId, String(formData.get("user_id") ?? "").trim()],
-    [GROW_SECRETS.apiKey, String(formData.get("api_key") ?? "").trim()],
+    [GROW_SECRETS.createCheckoutWebhookUrl, String(formData.get("create_checkout_url") ?? "").trim()],
+    [GROW_SECRETS.verifyWebhookUrl, String(formData.get("verify_url") ?? "").trim()],
+    [GROW_SECRETS.chargeTokenWebhookUrl, String(formData.get("charge_token_url") ?? "").trim()],
   ];
   for (const [name, value] of map) {
     if (value) await setSecret(org, name, value);
