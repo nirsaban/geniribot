@@ -2,22 +2,28 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { hasRole, type Role } from "@kesher/core";
 import { prisma, type ActivityKind } from "@kesher/db";
-import { Badge, Card } from "@/components/ui";
+import type { FieldSpec } from "@kesher/flow-engine";
+import { Badge, Card, ServerSelect } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
 import {
   callbackPhone,
-  formatFieldValue,
+  choiceOptions,
+  FIELD_INPUT,
+  fieldInputType,
+  fieldInputValue,
   isHiddenNumber,
   LEAD_STATUSES,
   leadVisibility,
   schemaOf,
   statusTone,
+  suggestionsByField,
 } from "@/lib/leads";
 import {
   addNoteAction,
   assignOwnerAction,
   deleteNoteAction,
+  saveFieldsAction,
   saveSummaryAction,
   setStatusAction,
   setTagAction,
@@ -36,11 +42,83 @@ const ACTIVITY_ICON: Record<ActivityKind, string> = {
   NOTE_ADDED: "📝",
   SUMMARY_SAVED: "📞",
   TAGS_CHANGED: "🔖",
+  FIELDS_UPDATED: "✏️",
   APPOINTMENT_BOOKED: "📅",
   APPOINTMENT_CANCELLED: "🚫",
   CONVERSATION_COMPLETED: "🤖",
   FOLLOW_UP_SENT: "🔥",
 };
+
+/**
+ * One editable answer.
+ *
+ * A question the scenario declared with `choices` is a closed menu — those are
+ * the only values its routing understands. Everything else stays free text (the
+ * lead could type anything on WhatsApp, and so must the agent correcting them)
+ * but is backed by a list of what has already been answered, so the common case
+ * is picking rather than retyping.
+ */
+function FieldRow({
+  domId,
+  fieldKey,
+  label,
+  spec,
+  value,
+  options,
+}: {
+  domId: string;
+  fieldKey: string;
+  label: string;
+  spec?: FieldSpec;
+  value: unknown;
+  options: string[];
+}) {
+  const name = FIELD_INPUT + fieldKey;
+  // The key is typed free-hand in the bot builder, so it cannot be trusted as a
+  // DOM id — `list` has to resolve, and "f:מנדף" would not.
+  const listId = `${domId}-opts`;
+  const current = fieldInputValue(spec, value);
+  const type = fieldInputType(spec, value);
+  const suggest = options.filter((o) => o !== current);
+
+  return (
+    <div>
+      <label className="label" htmlFor={domId}>
+        {label}
+      </label>
+      {spec?.choices?.length ? (
+        <ServerSelect id={domId} name={name} value={current} className="input w-full" dir="auto">
+          <option value="">{he.fieldNoValue}</option>
+          {choiceOptions(spec, value).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </ServerSelect>
+      ) : (
+        <>
+          <input
+            id={domId}
+            name={name}
+            type={type}
+            defaultValue={current}
+            placeholder={he.fieldNoValue}
+            className="input w-full"
+            dir={type === "tel" || type === "email" ? "ltr" : "auto"}
+            {...(suggest.length > 0 && type !== "date" ? { list: listId } : {})}
+          />
+          {suggest.length > 0 && type !== "date" && (
+            <datalist id={listId}>
+              {suggest.map((o) => (
+                <option key={o} value={o} />
+              ))}
+            </datalist>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -107,6 +185,17 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const known = new Set(specs.map((s) => s.key));
   const extras = Object.keys(values).filter((k) => !known.has(k) && values[k] !== "");
 
+  // What everyone else answered to the same questions, to offer while editing.
+  // Scoped to the same scenario: an identical key in another flow is a
+  // different question, and its answers would be noise here.
+  const peers = await prisma.contact.findMany({
+    where: { organizationId: session.org, sourceFlowId: contact.sourceFlowId },
+    select: { fields: true },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  });
+  const suggestions = suggestionsByField(peers, [...known, ...extras]);
+
   const messages = contact.conversations.flatMap((c) => c.messages);
 
   return (
@@ -155,13 +244,13 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <label className="label" htmlFor="status">
                 {he.changeStatus}
               </label>
-              <select id="status" name="status" defaultValue={contact.status} className="input">
+              <ServerSelect id="status" name="status" value={contact.status} className="input">
                 {LEAD_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {he.leadStatus[s]}
                   </option>
                 ))}
-              </select>
+              </ServerSelect>
             </div>
             <button className="btn-secondary btn-sm" type="submit">
               {he.bulkApply}
@@ -174,10 +263,10 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <label className="label" htmlFor="ownerUserId">
                 {he.assignOwner}
               </label>
-              <select
+              <ServerSelect
                 id="ownerUserId"
                 name="ownerUserId"
-                defaultValue={contact.ownerUserId ?? ""}
+                value={contact.ownerUserId ?? ""}
                 className="input"
               >
                 <option value="">{he.unassigned}</option>
@@ -190,7 +279,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                     {memberName(m)}
                   </option>
                 ))}
-              </select>
+              </ServerSelect>
             </div>
             <button className="btn-secondary btn-sm" type="submit">
               {he.bulkApply}
@@ -237,27 +326,40 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           {specs.length === 0 && extras.length === 0 ? (
             <p className="text-sm text-slate-400">—</p>
           ) : (
-            <dl className="space-y-2 text-sm">
-              {specs.map((spec) => {
-                const shown = formatFieldValue(spec, values[spec.key]);
-                return (
-                  <div key={spec.key} className="flex justify-between gap-3">
-                    <dt className="shrink-0 text-slate-500">{spec.label}</dt>
-                    <dd className={shown ? "text-left font-medium text-ink" : "text-slate-300"} dir="auto">
-                      {shown || "—"}
-                    </dd>
-                  </div>
-                );
-              })}
-              {extras.map((k) => (
-                <div key={k} className="flex justify-between gap-3">
-                  <dt className="shrink-0 text-slate-400">{k}</dt>
-                  <dd className="text-left font-medium text-ink" dir="auto">
-                    {formatFieldValue(undefined, values[k])}
-                  </dd>
-                </div>
+            /* Editable, because the bot records whatever the lead typed and an
+               agent needs to fix a mistyped answer without a developer. Choice
+               questions are a menu of the options the scenario declared, so an
+               edit cannot invent a value the flow's routing does not know. */
+            <form action={saveFieldsAction} className="space-y-3 text-sm">
+              <input type="hidden" name="id" value={contact.id} />
+              {specs.map((spec, i) => (
+                <FieldRow
+                  key={spec.key}
+                  domId={`lf${i}`}
+                  fieldKey={spec.key}
+                  label={spec.label}
+                  spec={spec}
+                  value={values[spec.key]}
+                  options={suggestions.get(spec.key) ?? []}
+                />
               ))}
-            </dl>
+              {/* Answers the scenario no longer declares — still the lead's data. */}
+              {extras.map((k, i) => (
+                <FieldRow
+                  key={k}
+                  domId={`lx${i}`}
+                  fieldKey={k}
+                  label={k}
+                  value={values[k]}
+                  options={suggestions.get(k) ?? []}
+                />
+              ))}
+              <div className="flex justify-end">
+                <button className="btn-secondary btn-sm" type="submit">
+                  {he.saveFields}
+                </button>
+              </div>
+            </form>
           )}
           <div className="mt-5 border-t border-line/60 pt-4">
             <h3 className="mb-2 text-sm font-semibold text-ink">{he.tagsTitle}</h3>
@@ -370,6 +472,9 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                   <div className="min-w-0">
                     <div className="text-ink">
                       {he.activityKind[a.kind]}
+                      {a.kind === "FIELDS_UPDATED" && a.toValue && (
+                        <span className="text-slate-500"> · {a.toValue}</span>
+                      )}
                       {a.kind === "STATUS_CHANGED" && a.toValue && (
                         <span className="text-slate-500">
                           {" "}

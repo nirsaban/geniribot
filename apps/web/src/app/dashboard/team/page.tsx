@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { hasRole, mailConfigured, type Role } from "@kesher/core";
 import { prisma } from "@kesher/db";
-import { Badge, Card, PageHeader } from "@/components/ui";
+import { Badge, Card, PageHeader, ServerSelect } from "@/components/ui";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
 import {
@@ -113,9 +113,9 @@ export default async function TeamPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <form action={changeRoleAction} className="flex items-center gap-2">
                     <input type="hidden" name="userId" value={m.id} />
-                    <select
+                    <ServerSelect
                       name="role"
-                      defaultValue={m.role}
+                      value={m.role}
                       disabled={lockRole}
                       title={he.roleHint[m.role]}
                       className="input btn-sm max-w-[9rem] disabled:opacity-50"
@@ -125,7 +125,7 @@ export default async function TeamPage() {
                           {he.roleLabel[r]}
                         </option>
                       ))}
-                    </select>
+                    </ServerSelect>
                     <button className="btn-secondary btn-sm" type="submit" disabled={lockRole}>
                       {he.changeRole}
                     </button>

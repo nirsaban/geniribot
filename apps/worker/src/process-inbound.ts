@@ -522,7 +522,7 @@ async function applyAndPersist(flow: FlowDefinition, result: StepResult, ctx: Ct
         select: { calcomLink: true },
       });
       if (org?.calcomLink) {
-        await sendOut(`אשמח לקבוע פגישה! קבע/י מועד שנוח לך כאן 👇\n${org.calcomLink}`, ctx);
+        await sendOut(`אשמח שנתאם שיחה טלפונית! קבע/י מועד שנוח לך כאן 👇\n${org.calcomLink}`, ctx);
         const resumed = resumeBooking(flow, finalState);
         for (const a of resumed.actions) if (a.kind === "send_message") await sendOut(a.text, ctx);
         finalState = resumed.state;
