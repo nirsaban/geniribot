@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@kesher/db";
+import { attendeeName, attendeePhone, type CalcomPayload } from "@/lib/calcom";
 import { OUTBOUND_JOB, outboundQueue, type OutboundJob } from "@/lib/outboundQueue";
 import { getSecret } from "@/lib/secrets";
 
@@ -22,23 +23,6 @@ export const dynamic = "force-dynamic";
 
 const SECRET_NAME = "calcom_webhook_secret";
 
-interface CalcomAttendee {
-  name?: string;
-  email?: string;
-  phoneNumber?: string;
-  timeZone?: string;
-}
-
-interface CalcomPayload {
-  uid?: string;
-  title?: string;
-  startTime?: string;
-  endTime?: string;
-  attendees?: CalcomAttendee[];
-  responses?: Record<string, { value?: unknown } | unknown>;
-  location?: string;
-}
-
 interface CalcomEvent {
   triggerEvent?: string;
   payload?: CalcomPayload;
@@ -52,39 +36,30 @@ function verifySignature(raw: string, signature: string | null, secret: string):
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Pull anything phone-shaped out of the booking (attendee field or a form answer). */
-function extractPhone(p: CalcomPayload): string | null {
-  const candidates: unknown[] = [];
-  for (const a of p.attendees ?? []) candidates.push(a.phoneNumber);
-  for (const v of Object.values(p.responses ?? {})) {
-    candidates.push(typeof v === "object" && v !== null && "value" in v ? (v as { value: unknown }).value : v);
-  }
-  candidates.push(p.location);
-  for (const c of candidates) {
-    if (typeof c !== "string") continue;
-    const digits = c.replace(/\D/g, "");
-    // 9+ digits smells like a phone number; shorter strings are answers/emails.
-    if (digits.length >= 9) return digits;
-  }
-  return null;
-}
-
-function attendeeName(p: CalcomPayload): string | null {
-  return p.attendees?.[0]?.name?.trim() || null;
-}
+/** How confident we are that `contact` is the person who booked. */
+type MatchedBy = "phone" | "created_from_booking" | "name" | "recent_activity";
 
 /**
- * Match the booking to a lead.
+ * Resolve the booking to the lead who actually booked it.
  *
- * Cal.com's default form asks for name+email while leads are keyed by phone,
- * so matching is best-effort, strongest first:
- *  1. phone digits from the booking vs. the lead's number,
- *  2. exact attendee name,
- *  3. the lead most recently active on WhatsApp (they were just sent the
- *     booking link there, minutes ago).
+ * Strongest first:
+ *  1. the attendee's own phone vs. a lead's number — the only identifier both
+ *     systems share, and the only one we can message,
+ *  2. that phone with no lead behind it: plenty of people book straight off the
+ *     Cal.com link without ever messaging the bot, so the booking *is* the
+ *     lead — create it rather than pinning the meeting onto a stranger,
+ *  3. exact attendee name,
+ *  4. the lead most recently active on WhatsApp.
+ *
+ * `confirmable` marks whether we know the booker well enough to message them.
+ * Case 4 is a guess: it fires when the booking carries no phone and no known
+ * name, so the "most recent chatter" is simply whoever happened to be talking
+ * to the bot — messaging them would confirm a meeting they never booked.
  */
-async function matchContact(organizationId: string, p: CalcomPayload) {
-  const phone = extractPhone(p);
+async function resolveBooker(organizationId: string, p: CalcomPayload) {
+  const phone = attendeePhone(p);
+  const name = attendeeName(p);
+
   if (phone) {
     // Suffix-match (last 9 digits) so "+972 50…" and "050…" formats meet.
     const tail = phone.slice(-9);
@@ -92,16 +67,24 @@ async function matchContact(organizationId: string, p: CalcomPayload) {
       where: { organizationId, phone: { endsWith: tail } },
       orderBy: { lastContactedAt: "desc" },
     });
-    if (byPhone) return { contact: byPhone, matchedBy: "phone" as const };
+    if (byPhone) return { contact: byPhone, matchedBy: "phone" as MatchedBy, confirmable: true };
+
+    // Upsert, not create: two Cal.com deliveries for the same new booker would
+    // otherwise race on the (organizationId, phone) unique.
+    const created = await prisma.contact.upsert({
+      where: { organizationId_phone: { organizationId, phone } },
+      create: { organizationId, phone, name, source: "Cal.com" },
+      update: {},
+    });
+    return { contact: created, matchedBy: "created_from_booking" as MatchedBy, confirmable: true };
   }
 
-  const name = attendeeName(p);
   if (name) {
     const byName = await prisma.contact.findFirst({
       where: { organizationId, name: { equals: name, mode: "insensitive" } },
       orderBy: { lastContactedAt: "desc" },
     });
-    if (byName) return { contact: byName, matchedBy: "name" as const };
+    if (byName) return { contact: byName, matchedBy: "name" as MatchedBy, confirmable: true };
   }
 
   const RECENT_MS = 3 * 3600 * 1000;
@@ -109,7 +92,7 @@ async function matchContact(organizationId: string, p: CalcomPayload) {
     where: { organizationId, lastContactedAt: { gte: new Date(Date.now() - RECENT_MS) } },
     orderBy: { lastContactedAt: "desc" },
   });
-  if (recent) return { contact: recent, matchedBy: "recent_activity" as const };
+  if (recent) return { contact: recent, matchedBy: "recent_activity" as MatchedBy, confirmable: false };
   return null;
 }
 
@@ -139,18 +122,28 @@ async function sendBookingSummary(
   try {
     // The conversation the booking link went out on; its connection is the
     // number the lead is already talking to.
-    const convo = await prisma.conversation.findFirst({
+    const existing = await prisma.conversation.findFirst({
       where: { organizationId, contactId: contact.id },
       orderBy: { lastMessageAt: "desc" },
       select: { id: true, connectionId: true },
     });
-    const conn = convo
-      ? { id: convo.connectionId }
+    const conn = existing
+      ? { id: existing.connectionId }
       : await prisma.whatsAppConnection.findFirst({
           where: { organizationId, status: "CONNECTED" },
           select: { id: true },
         });
     if (!conn) return; // nowhere to send from
+
+    // Someone who booked off the link has no thread yet — open one (no flow, so
+    // the bot won't start interrogating them) so the confirmation is visible in
+    // the CRM instead of vanishing into the queue.
+    const convo =
+      existing ??
+      (await prisma.conversation.create({
+        data: { organizationId, contactId: contact.id, connectionId: conn.id, state: {} },
+        select: { id: true, connectionId: true },
+      }));
 
     const text =
       `הפגישה נקבעה בהצלחה! ✅\n` +
@@ -160,15 +153,13 @@ async function sendBookingSummary(
 
     // Record in the transcript first (mirrors the worker's sendOut order), so
     // the dashboard shows the confirmation even if the send lags.
-    if (convo) {
-      await prisma.message.create({
-        data: { conversationId: convo.id, direction: "OUT", body: text },
-      });
-      await prisma.conversation.update({
-        where: { id: convo.id },
-        data: { lastMessageAt: new Date() },
-      });
-    }
+    await prisma.message.create({
+      data: { conversationId: convo.id, direction: "OUT", body: text },
+    });
+    await prisma.conversation.update({
+      where: { id: convo.id },
+      data: { lastMessageAt: new Date() },
+    });
     const job: OutboundJob = {
       organizationId,
       connectionId: conn.id,
@@ -242,9 +233,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ orgId: 
     return NextResponse.json({ error: "missing_times" }, { status: 400 });
   }
 
-  const match = await matchContact(orgId, p);
+  const match = await resolveBooker(orgId, p);
   if (!match) return NextResponse.json({ ok: true, note: "no_matching_lead" });
-  const { contact, matchedBy } = match;
+  const { contact, matchedBy, confirmable } = match;
 
   // Idempotency: Cal.com retries deliveries; the unique calcomUid makes a
   // second create a no-op instead of a duplicate meeting.
@@ -279,7 +270,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ orgId: 
         organizationId: orgId,
         contactId: contact.id,
         kind: "APPOINTMENT_BOOKED",
-        meta: { calcomUid: p.uid ?? null, matchedBy, title: p.title ?? null },
+        // attendee* is kept so a mis-attributed booking can be traced back to
+        // who Cal.com actually said booked it.
+        meta: {
+          calcomUid: p.uid ?? null,
+          matchedBy,
+          title: p.title ?? null,
+          attendeeName: attendeeName(p),
+          attendeePhone: attendeePhone(p),
+        },
       },
     }),
     ...(advance
@@ -297,7 +296,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ orgId: 
       : []),
   ]);
 
-  await sendBookingSummary(orgId, contact, new Date(p.startTime), p.title ?? null);
+  // Only message someone we actually identified. A `recent_activity` guess used
+  // to confirm the meeting to whoever last chatted with the bot.
+  if (confirmable) {
+    await sendBookingSummary(orgId, contact, new Date(p.startTime), p.title ?? null);
+  } else {
+    console.warn(
+      `calcom webhook: booking ${p.uid} has no attendee phone and no known name — ` +
+        `recorded against contact ${contact.id} but no confirmation sent`,
+    );
+  }
 
-  return NextResponse.json({ ok: true, matchedBy });
+  return NextResponse.json({ ok: true, matchedBy, confirmed: confirmable });
 }

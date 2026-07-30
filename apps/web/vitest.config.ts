@@ -3,8 +3,13 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
-    // Mirror the `@/*` alias from tsconfig so tests import the same way the app does.
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      // Mirror the `@/*` alias from tsconfig so tests import the same way the app does.
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // Server-only modules under test declare `import "server-only"`, which only
+      // Next's bundler resolves. Point it at a no-op so they load in Vitest.
+      "server-only": fileURLToPath(new URL("./vitest/server-only.stub.ts", import.meta.url)),
+    },
   },
   test: {
     include: ["src/**/*.test.ts"],
