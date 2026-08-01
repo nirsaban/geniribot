@@ -265,6 +265,7 @@ export interface LeadFilters {
   status?: string;
   owner?: string;
   flow?: string;
+  product?: string;
   tag?: string;
   from?: string;
   to?: string;
@@ -372,6 +373,9 @@ export function buildLeadWhere(
 
   if (f.flow === "none") where.sourceFlowId = null;
   else if (f.flow) where.sourceFlowId = f.flow;
+
+  if (f.product === "none") where.productId = null;
+  else if (f.product) where.productId = f.product;
 
   if (f.tag) where.tags = { has: f.tag };
 

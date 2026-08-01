@@ -7,6 +7,7 @@ export interface PlanOverride {
   connections: number;
   contacts: number;
   monthlyMessages: number;
+  products: number;
 }
 
 /** Merge super-admin overrides onto the static defaults (a plan with no row keeps its default). */
@@ -20,7 +21,12 @@ export function mergePlans(overrides: Partial<Record<PlanId, PlanOverride>>): Re
           ...base,
           priceIls: o.priceIls,
           annualIls: o.annualIls,
-          limits: { connections: o.connections, contacts: o.contacts, monthlyMessages: o.monthlyMessages },
+          limits: {
+            connections: o.connections,
+            contacts: o.contacts,
+            monthlyMessages: o.monthlyMessages,
+            products: o.products,
+          },
         }
       : base;
   }

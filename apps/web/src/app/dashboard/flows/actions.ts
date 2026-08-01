@@ -145,10 +145,19 @@ export async function createFlowAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
   const key = String(formData.get("template") ?? "lead");
   const tpl = TEMPLATES[key] ?? TEMPLATES.lead!;
+
+  const productId = String(formData.get("productId") ?? "").trim() || null;
+  let product: { name: string } | null = null;
+  if (productId) {
+    product = await prisma.product.findFirst({ where: { id: productId, organizationId: org }, select: { name: true } });
+    if (!product) redirect("/dashboard/flows");
+  }
+
   const flow = await prisma.flow.create({
     data: {
       organizationId: org,
-      name: tpl.name,
+      name: product ? `${tpl.name} — ${product.name}` : tpl.name,
+      productId,
       isActive: false,
       definition: tpl.definition as Prisma.InputJsonValue,
       fieldSchema: deriveFieldSchema(
@@ -156,5 +165,22 @@ export async function createFlowAction(formData: FormData): Promise<void> {
       ) as unknown as Prisma.InputJsonValue,
     },
   });
+  revalidatePath("/dashboard/products");
   redirect(`/dashboard/flows/${flow.id}/edit`);
+}
+
+/** Assign or unassign the product this scenario sells — surfaced on the flow editor header. */
+export async function setFlowProductAction(formData: FormData): Promise<void> {
+  const org = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const flow = await ownFlow(org, id);
+  const productId = String(formData.get("productId") ?? "").trim() || null;
+  if (productId) {
+    const owned = await prisma.product.findFirst({ where: { id: productId, organizationId: org } });
+    if (!owned) return;
+  }
+  await prisma.flow.update({ where: { id: flow.id }, data: { productId } });
+  revalidatePath("/dashboard/flows");
+  revalidatePath(`/dashboard/flows/${id}/edit`);
+  revalidatePath("/dashboard/products");
 }

@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { planPrice, type BillingInterval, type PlanId } from "@kesher/billing";
-import { withBase } from "@/lib/basePath";
-import { growPlatformProvider } from "@/lib/billing";
+import type { PlanId } from "@kesher/billing";
+import { growPaymentUrlFor, withOrgField, type PaidPlanId } from "@/lib/billing";
 import { getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-/** Super admin generates a Grow payment link for an org + plan (platform creds). */
+/** Super admin generates a Grow payment link for an org + plan (static per-plan links). */
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.sa) return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -18,28 +17,13 @@ export async function POST(req: Request) {
     interval?: string;
   };
   const catalog = await getPlanCatalog();
-  if (!orgId || !plan || !(plan in catalog)) {
+  if (!orgId || !plan || !(plan in catalog) || plan === "FREE") {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
-  const interval: BillingInterval = rawInterval === "ANNUAL" ? "ANNUAL" : "MONTHLY";
+  const interval = rawInterval === "ANNUAL" ? "ANNUAL" : "MONTHLY";
 
-  const provider = await growPlatformProvider();
-  if (!provider) return NextResponse.json({ error: "not_configured" }, { status: 400 });
+  const url = await growPaymentUrlFor(plan as PaidPlanId, interval);
+  if (!url) return NextResponse.json({ error: "not_configured" }, { status: 400 });
 
-  const base = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";
-  try {
-    const { url } = await provider.createCheckout({
-      plan,
-      interval,
-      sumIls: planPrice(plan, interval, catalog),
-      description: `GeniriBot — מסלול ${catalog[plan].name}`,
-      organizationId: orgId,
-      notifyUrl: `${base}${withBase("/api/billing/grow/webhook")}`,
-      successUrl: `${base}${withBase("/dashboard/billing?paid=1")}`,
-      cancelUrl: `${base}${withBase("/dashboard/billing?cancelled=1")}`,
-    });
-    return NextResponse.json({ url });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-  }
+  return NextResponse.json({ url: withOrgField(url, orgId) });
 }

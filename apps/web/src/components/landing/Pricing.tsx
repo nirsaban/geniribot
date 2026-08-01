@@ -3,16 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { BillingInterval, Plan, PlanId } from "@kesher/billing";
+import type { GrowPaymentUrls, PaidPlanId } from "@/lib/billing";
 import { landing } from "./copy";
 
 const ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 const c = landing.pricing;
 
 export function Pricing({
-  paymentUrl,
+  paymentUrls,
   plans,
 }: {
-  paymentUrl: string;
+  paymentUrls: GrowPaymentUrls;
   plans: Record<PlanId, Plan>;
 }) {
   const [interval, setInterval] = useState<BillingInterval>("MONTHLY");
@@ -48,9 +49,13 @@ export function Pricing({
           const isFree = id === "FREE";
           const price = isFree ? 0 : annual ? plan.annualIls : plan.priceIls;
           // Free: login (existing users) — the billing page offers the plan
-          // choice again right after. Paid: straight to the Grow payment page;
-          // people without an account yet create one after paying.
-          const href = isFree ? "/login?next=/dashboard/billing" : paymentUrl;
+          // choice again right after. Paid: straight to the Grow payment page
+          // for this exact plan + interval; people without an account yet
+          // create one after paying. Falls back to login if that link isn't
+          // configured yet.
+          const href = isFree
+            ? "/login?next=/dashboard/billing"
+            : paymentUrls[id as PaidPlanId][interval] ?? "/login?next=/dashboard/billing";
 
           return (
             <div

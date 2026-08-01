@@ -27,10 +27,18 @@ export default async function FlowsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const flows = await prisma.flow.findMany({
-    where: { organizationId: session.org },
-    orderBy: { createdAt: "desc" },
-  });
+  const [flows, products] = await Promise.all([
+    prisma.flow.findMany({
+      where: { organizationId: session.org },
+      orderBy: { createdAt: "desc" },
+      include: { product: { select: { name: true } } },
+    }),
+    prisma.product.findMany({
+      where: { organizationId: session.org },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   return (
     <>
@@ -38,8 +46,18 @@ export default async function FlowsPage() {
         title={he.flowsTitle}
         subtitle={he.flowsSubtitle}
         action={
-          <form action={createFlowAction}>
+          <form action={createFlowAction} className="flex items-center gap-2">
             <input type="hidden" name="template" value="lead" />
+            {products.length > 0 && (
+              <select name="productId" className="input btn-sm" defaultValue="">
+                <option value="">{he.flowGeneralOption}</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <button className="btn-primary">+ {he.newFlow}</button>
           </form>
         }
@@ -57,6 +75,7 @@ export default async function FlowsPage() {
                   {he.colVersion} {f.version} · {stepCount(f.definition)} {he.colSteps}
                 </div>
                 <div className="mt-1 text-xs text-amber-700">⚡ {triggerLabel(f.definition)}</div>
+                {f.product && <div className="mt-1 text-xs text-brand">🛍️ {f.product.name}</div>}
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className={f.isActive ? "badge-green" : "badge-gray"}>

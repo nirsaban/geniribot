@@ -67,8 +67,8 @@ scale & polish.
 - Still to do (later): drag-to-connect edges, rollback to a prior version, in-editor test-run.
 
 ### Phase 7 — SaaS-ready ✅ CORE DONE (2026-07-15)
-- [x] Billing via **Grow** (Israeli payments, NOT Stripe): `@kesher/billing` plan catalog (FREE/STARTER/PRO + limits) + `GrowProvider` (Meshulam light API `createPaymentProcess`) behind a `PaymentProvider` interface; `/dashboard/billing` plans page + checkout; `/api/billing/grow/webhook` activates the plan. Plan connection-limit enforced.
-- [x] **Secure per-tenant secrets**: `Secret` model (AES-256-GCM encrypted, `@kesher/core` crypto); a "paste your Grow keys" UI that only ever shows a masked hint; save/remove server actions.
+- [x] Billing via **Grow** (Israeli payments, NOT Stripe): `@kesher/billing` plan catalog (FREE/STARTER/PRO + limits); static Grow-hosted payment page per plan × billing interval (super-admin pastes each link in `/admin`, tagged with `cField1=organizationId`); `/dashboard/billing` plans page + checkout; `/api/billing/grow/webhook` activates the plan (unauthenticated callback, trusted by matching the charged sum to a known plan price). Plan connection-limit enforced.
+- [x] **Secure per-tenant secrets**: `Secret` model (AES-256-GCM encrypted, `@kesher/core` crypto) for things like the Cal.com webhook secret and platform-level Meta app config; a masked-hint paste UI; save/remove server actions.
 - [x] **Onboarding wizard** (`/dashboard/onboarding`): 3 steps (connect WhatsApp → availability → paste Grow secret) with instructions on how to get the secret; `onboardedAt` on Organization.
 - [x] **Flow triggers** (user request): every flow starts from an inbound message; the builder's first section defines the trigger (any / keyword). Worker routes a new conversation to the flow whose trigger matches the message (keyword > catch-all). Shown in flows list + editor.
 - **Verified live:** trigger routing (keyword→support, else→catch-all), secret encrypt/decrypt round-trip, billing/onboarding/settings pages render. 17/17 typecheck, 23/23 tests.

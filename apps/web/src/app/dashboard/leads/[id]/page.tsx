@@ -25,6 +25,7 @@ import {
   deleteNoteAction,
   saveFieldsAction,
   saveSummaryAction,
+  setLeadProductAction,
   setStatusAction,
   setTagAction,
 } from "../actions";
@@ -47,6 +48,7 @@ const ACTIVITY_ICON: Record<ActivityKind, string> = {
   APPOINTMENT_CANCELLED: "🚫",
   CONVERSATION_COMPLETED: "🤖",
   FOLLOW_UP_SENT: "🔥",
+  PRODUCT_ASSIGNED: "🛍️",
 };
 
 /**
@@ -150,11 +152,16 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   });
   if (!contact) notFound();
 
-  const [members, sourceFlow, summaryAuthor] = await Promise.all([
+  const [members, products, sourceFlow, summaryAuthor] = await Promise.all([
     prisma.user.findMany({
       where: { organizationId: session.org },
       select: { id: true, name: true, email: true },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.product.findMany({
+      where: { organizationId: session.org },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "desc" },
     }),
     contact.sourceFlowId
       ? prisma.flow.findFirst({
@@ -285,6 +292,28 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               {he.bulkApply}
             </button>
           </form>
+
+          {products.length > 0 && (
+            <form action={setLeadProductAction} className="flex items-end gap-2">
+              <input type="hidden" name="id" value={contact.id} />
+              <div className="flex-1">
+                <label className="label" htmlFor="productId">
+                  {he.assignProduct}
+                </label>
+                <ServerSelect id="productId" name="productId" value={contact.productId ?? ""} className="input">
+                  <option value="">{he.flowProductNone}</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </ServerSelect>
+              </div>
+              <button className="btn-secondary btn-sm" type="submit">
+                {he.bulkApply}
+              </button>
+            </form>
+          )}
         </div>
       </Card>
 

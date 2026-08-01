@@ -108,6 +108,38 @@ export async function assignOwnerAction(formData: FormData): Promise<void> {
   refresh(lead.id);
 }
 
+/**
+ * Manually attach (or detach) an existing lead to a product — the retroactive
+ * counterpart to the automatic first-engagement attribution `process-inbound`
+ * does for new leads (see `apps/worker/src/process-inbound.ts`). Anyone with
+ * visibility into the lead may set this, same as tags/fields.
+ */
+export async function setLeadProductAction(formData: FormData): Promise<void> {
+  const session = await requireSession();
+  const id = String(formData.get("id") ?? "");
+  const raw = String(formData.get("productId") ?? "");
+  const productId = raw === "" ? null : raw;
+
+  const lead = await ownLead(session, id);
+  if (lead.productId === productId) return;
+
+  if (productId) {
+    const owned = await prisma.product.findFirst({ where: { id: productId, organizationId: session.org } });
+    if (!owned) return;
+  }
+
+  await prisma.contact.update({ where: { id: lead.id }, data: { productId } });
+  await logActivity({
+    organizationId: session.org,
+    contactId: lead.id,
+    userId: session.sub,
+    kind: "PRODUCT_ASSIGNED",
+    fromValue: lead.productId,
+    toValue: productId,
+  });
+  refresh(lead.id);
+}
+
 /** The post-call summary the agent types in — never generated. */
 export async function saveSummaryAction(formData: FormData): Promise<void> {
   const session = await requireSession();

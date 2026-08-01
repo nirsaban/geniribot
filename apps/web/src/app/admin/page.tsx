@@ -2,23 +2,19 @@ import { redirect } from "next/navigation";
 import { type PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { Card, PageHeader, Stat } from "@/components/ui";
-import { GROW_SECRETS, growPaymentUrl, platformOrgId } from "@/lib/billing";
+import { getGrowPaymentUrls, platformOrgId } from "@/lib/billing";
 import { he } from "@/lib/he";
 import { META_SECRETS } from "@/lib/meta";
 import { getPlanCatalog } from "@/lib/plan";
 import { getSecret, secretMask } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
-import { GrowSecrets } from "../dashboard/settings/GrowSecrets";
 import {
-  removePlatformGrowAction,
   removePlatformMetaAction,
   savePlanConfigAction,
-  savePlatformGrowAction,
   savePlatformMetaAction,
-  savePlatformPaymentUrlAction,
+  savePlatformPaymentUrlsAction,
   setOrgPlanAction,
 } from "./actions";
-import { ChargeOrg } from "./ChargeOrg";
 import { MetaSecrets } from "./MetaSecrets";
 import { PaymentLink } from "./PaymentLink";
 
@@ -37,19 +33,10 @@ export default async function AdminPage() {
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { users: true, contacts: true } },
-      subscription: { select: { growCardToken: true } },
     },
   });
   const usersCount = await prisma.user.count({ where: { isSuperAdmin: false } });
   const paidCount = orgs.filter((o) => o.plan !== "FREE").length;
-
-  const [createCheckoutMask, verifyMask, chargeTokenMask] = platformId
-    ? await Promise.all([
-        secretMask(platformId, GROW_SECRETS.createCheckoutWebhookUrl),
-        secretMask(platformId, GROW_SECRETS.verifyWebhookUrl),
-        secretMask(platformId, GROW_SECRETS.chargeTokenWebhookUrl),
-      ])
-    : [null, null, null];
 
   const [metaAppIdMask, metaAppSecretMask, metaConfigIdMask, metaVerifyMask, metaGraphVersion] =
     platformId
@@ -63,7 +50,7 @@ export default async function AdminPage() {
       : [null, null, null, null, null];
 
   const fmt = (d: Date) => new Intl.DateTimeFormat("he-IL", { dateStyle: "short" }).format(d);
-  const [paymentUrl, catalog] = await Promise.all([growPaymentUrl(), getPlanCatalog()]);
+  const [paymentUrls, catalog] = await Promise.all([getGrowPaymentUrls(), getPlanCatalog()]);
 
   return (
     <>
@@ -117,7 +104,6 @@ export default async function AdminPage() {
                           ))}
                         </div>
                         <PaymentLink orgId={o.id} />
-                        <ChargeOrg orgId={o.id} hasSavedCard={Boolean(o.subscription?.growCardToken)} />
                       </div>
                     </td>
                   </tr>
@@ -155,6 +141,7 @@ export default async function AdminPage() {
                     name="monthlyMessages"
                     defaultValue={plan.limits.monthlyMessages}
                   />
+                  <NumField label={he.planConfigProducts} name="products" defaultValue={plan.limits.products} />
                   <button className="btn-primary btn-sm w-full">{he.saveSecret}</button>
                 </form>
               </Card>
@@ -163,36 +150,34 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/* Static Grow payment page link — used until API checkout is live */}
+      {/* Static Grow payment page links — one per plan × billing interval */}
       <div className="mt-6">
         <h2 className="mb-1 font-semibold text-ink">{he.platformPaymentUrl}</h2>
         <p className="mb-3 text-sm text-slate-500">{he.platformPaymentUrlDesc}</p>
         <Card>
-          <form action={savePlatformPaymentUrlAction} className="flex flex-wrap gap-2">
-            <input
-              name="url"
-              defaultValue={paymentUrl}
-              dir="ltr"
-              placeholder={he.platformPaymentUrlPlaceholder}
-              className="input min-w-0 flex-1 text-left"
+          <form action={savePlatformPaymentUrlsAction} className="grid gap-3 sm:grid-cols-2">
+            <PaymentUrlField
+              label={he.platformPaymentUrlStarterMonthly}
+              name="starter_monthly"
+              defaultValue={paymentUrls.STARTER.MONTHLY}
             />
-            <button className="btn-primary shrink-0">{he.saveSecret}</button>
+            <PaymentUrlField
+              label={he.platformPaymentUrlStarterAnnual}
+              name="starter_annual"
+              defaultValue={paymentUrls.STARTER.ANNUAL}
+            />
+            <PaymentUrlField
+              label={he.platformPaymentUrlProMonthly}
+              name="pro_monthly"
+              defaultValue={paymentUrls.PRO.MONTHLY}
+            />
+            <PaymentUrlField
+              label={he.platformPaymentUrlProAnnual}
+              name="pro_annual"
+              defaultValue={paymentUrls.PRO.ANNUAL}
+            />
+            <button className="btn-primary sm:col-span-2">{he.saveSecret}</button>
           </form>
-        </Card>
-      </div>
-
-      {/* Platform Grow config */}
-      <div className="mt-6">
-        <h2 className="mb-1 font-semibold text-ink">{he.platformGrow}</h2>
-        <p className="mb-3 text-sm text-slate-500">{he.platformGrowDesc}</p>
-        <Card>
-          <GrowSecrets
-            createCheckoutMask={createCheckoutMask}
-            verifyMask={verifyMask}
-            chargeTokenMask={chargeTokenMask}
-            saveAction={savePlatformGrowAction}
-            removeAction={removePlatformGrowAction}
-          />
         </Card>
       </div>
 
@@ -234,6 +219,29 @@ function NumField({
         min={0}
         defaultValue={defaultValue}
         dir="ltr"
+        className="input mt-0.5 w-full text-left"
+      />
+    </label>
+  );
+}
+
+function PaymentUrlField({
+  label,
+  name,
+  defaultValue,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string | null;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-slate-500">{label}</span>
+      <input
+        name={name}
+        defaultValue={defaultValue ?? ""}
+        dir="ltr"
+        placeholder={he.platformPaymentUrlPlaceholder}
         className="input mt-0.5 w-full text-left"
       />
     </label>

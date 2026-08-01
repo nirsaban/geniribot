@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
-import { GROW_SECRETS } from "@/lib/billing";
 import { requireFeature } from "@/lib/plan";
 import { deleteSecret, setSecret } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
@@ -53,26 +52,4 @@ export async function saveCalcomWebhookSecretAction(formData: FormData): Promise
   if (value) await setSecret(org, "calcom_webhook_secret", value);
   else await deleteSecret(org, "calcom_webhook_secret");
   revalidatePath("/dashboard/settings");
-}
-
-/** Save pasted Grow-via-Make webhook URLs (encrypted). Only non-empty fields are updated. */
-export async function saveGrowSecretsAction(formData: FormData): Promise<void> {
-  const org = await requireOrg();
-  const map: Array<[string, string]> = [
-    [GROW_SECRETS.createCheckoutWebhookUrl, String(formData.get("create_checkout_url") ?? "").trim()],
-    [GROW_SECRETS.verifyWebhookUrl, String(formData.get("verify_url") ?? "").trim()],
-    [GROW_SECRETS.chargeTokenWebhookUrl, String(formData.get("charge_token_url") ?? "").trim()],
-  ];
-  for (const [name, value] of map) {
-    if (value) await setSecret(org, name, value);
-  }
-  revalidatePath("/dashboard/settings");
-  revalidatePath("/dashboard/onboarding");
-}
-
-export async function removeGrowSecretsAction(): Promise<void> {
-  const org = await requireOrg();
-  for (const name of Object.values(GROW_SECRETS)) await deleteSecret(org, name);
-  revalidatePath("/dashboard/settings");
-  revalidatePath("/dashboard/onboarding");
 }

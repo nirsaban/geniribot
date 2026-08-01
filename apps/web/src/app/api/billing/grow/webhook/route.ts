@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server";
 import type { GrowCallback } from "@kesher/billing";
-import { growPlatformProvider } from "@/lib/billing";
 import { applyGrowPayment } from "@/lib/subscriptions";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Grow (Meshulam) payment callback — fires on the first charge AND on every
- * recurring renewal of the managed payment page. Our custom fields carry
- * cField1 = organizationId, cField2 = plan, cField3 = interval.
+ * recurring renewal of the managed payment page. Our custom field carries
+ * cField1 = organizationId (set when we generated the link via /dashboard or
+ * /admin; absent for a raw static-page payment, parked as unclaimed).
  *
- * Security: the callback itself is unauthenticated, so we NEVER trust it
- * directly. We re-fetch the transaction from Grow (`getPaymentProcessInfo`) and
- * only act on the authoritative result — that Make scenario also acks the
- * transaction with Grow's `approveTransaction` internally. Deliveries are
- * deduped by transaction id (see `applyGrowPayment`).
+ * Security: the callback itself is unauthenticated and we do not call back
+ * into Grow to verify it (no API/Make integration) — `applyGrowPayment`
+ * derives the plan/interval from the charged sum against known plan prices
+ * rather than trusting the plan/interval fields directly, and deliveries are
+ * deduped by transaction id. This does NOT stop a forged POST carrying a
+ * real org id and a sum that matches a real plan price from activating that
+ * plan for free — acceptable for now given no live Grow API access, but
+ * worth revisiting if that risk matters more later.
  */
 export async function POST(req: Request) {
   let flat: Record<string, string> = {};
@@ -56,40 +59,10 @@ export async function POST(req: Request) {
     cField3: flat["data[customFields][cField3]"],
   };
 
-  const provider = await growPlatformProvider();
-  if (!provider) {
-    // Cannot verify without platform credentials — refuse to act on an
-    // unverifiable callback rather than trust it.
-    return NextResponse.json({ ok: false, error: "not_configured" }, { status: 503 });
-  }
+  const ok = raw.statusCode === "2" || raw.status === "1" || raw.status === "success";
+  if (!ok) return NextResponse.json({ ok: false, error: "not_successful" }, { status: 400 });
 
-  const processId = raw.processId;
-  const processToken = raw.processToken;
-  if (!processId || !processToken) {
-    return NextResponse.json({ ok: false, error: "missing_process" }, { status: 400 });
-  }
-
-  const verified = await provider.verifyTransaction(processId, processToken, raw.transactionId, raw.transactionToken);
-  if (!verified) {
-    // Not a real, successful transaction — ignore.
-    return NextResponse.json({ ok: false, error: "unverified" }, { status: 400 });
-  }
-
-  // Authoritative data wins; keep our echoed custom fields if Grow omits them.
-  const cb: GrowCallback = { ...raw, ...stripUndefined(verified) };
-  cb.cField1 = verified.cField1 ?? raw.cField1;
-  cb.cField2 = verified.cField2 ?? raw.cField2;
-  cb.cField3 = verified.cField3 ?? raw.cField3;
-
-  // verifyTransaction's Make scenario also approves the transaction with Grow
-  // internally — no separate approve call needed here.
-  const result = await applyGrowPayment(cb);
+  const result = await applyGrowPayment(raw);
 
   return NextResponse.json({ ok: true, applied: result.applied, reason: result.reason });
-}
-
-function stripUndefined(o: GrowCallback): GrowCallback {
-  const out: GrowCallback = {};
-  for (const [k, v] of Object.entries(o)) if (v !== undefined) out[k] = v;
-  return out;
 }

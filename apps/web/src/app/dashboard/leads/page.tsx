@@ -80,14 +80,14 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const sort = isLeadSort(params.sort) ? params.sort : "new";
   const page = Math.max(1, Number(params.page ?? 1) || 1);
 
-  const [total, contacts, members, scenarios, tagRows, atContactsLimit] = await Promise.all([
+  const [total, contacts, members, scenarios, products, tagRows, atContactsLimit] = await Promise.all([
     prisma.contact.count({ where }),
     prisma.contact.findMany({
       where,
       orderBy: LEAD_SORTS[sort],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { owner: { select: { id: true, name: true, email: true } } },
+      include: { owner: { select: { id: true, name: true, email: true } }, product: { select: { name: true } } },
     }),
     prisma.user.findMany({
       where: { organizationId: session.org },
@@ -95,6 +95,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       orderBy: { createdAt: "asc" },
     }),
     loadScenarioSchemas(session.org),
+    prisma.product.findMany({
+      where: { organizationId: session.org },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "desc" },
+    }),
     // Scoped the same way, so the tag filter never hints at leads the viewer
     // cannot open.
     prisma.contact.findMany({
@@ -129,6 +134,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       params.status ||
       params.owner ||
       params.flow ||
+      params.product ||
       params.tag ||
       params.from ||
       params.to ||
@@ -213,6 +219,21 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               {scenarios.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="product">
+              {he.filterProduct}
+            </label>
+            <select id="product" name="product" defaultValue={params.product ?? ""} className="input">
+              <option value="">{he.anyValue}</option>
+              <option value="none">{he.sourceNone}</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -371,6 +392,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                         ) : (
                           <span className="badge-gray">{he.sourceNone}</span>
                         )}
+                        {c.product && <div className="mt-1 text-xs text-slate-400">🛍️ {c.product.name}</div>}
                       </td>
                       <td className="max-w-xs truncate p-3 text-slate-400">{answersSummary(c.fields)}</td>
                       <td className="whitespace-nowrap p-3 text-slate-400">{fmtDate(c.createdAt)}</td>

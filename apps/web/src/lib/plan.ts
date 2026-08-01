@@ -51,3 +51,12 @@ export async function contactsLimitReached(orgId: string): Promise<boolean> {
   ]);
   return count >= planLimits(plan, catalog).contacts;
 }
+
+export async function productsLimitReached(orgId: string): Promise<boolean> {
+  const [plan, catalog, count] = await Promise.all([
+    effectivePlanForOrg(orgId),
+    getPlanCatalog(),
+    prisma.product.count({ where: { organizationId: orgId } }),
+  ]);
+  return count >= planLimits(plan, catalog).products;
+}

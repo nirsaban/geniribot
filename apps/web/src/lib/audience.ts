@@ -24,18 +24,6 @@ export function normalizePhone(raw: string): string | null {
 }
 
 /**
- * Reverse of the 972-prefixing above — Israeli payment providers (Grow) want
- * the local 05X-XXXXXXX form, not the WhatsApp-style 972… form we store.
- * Returns null for non-Israeli numbers, since there's no local form for those.
- */
-export function toIsraeliLocalPhone(stored: string): string | null {
-  const digits = stored.replace(/\D/g, "");
-  if (digits.startsWith("972") && digits.length === 12) return `0${digits.slice(3)}`;
-  if (digits.startsWith("0") && digits.length === 10) return digits;
-  return null;
-}
-
-/**
  * Parse a recipients CSV: first column phone, optional second column name.
  * Handles comma/semicolon/tab delimiters and skips a header row (a first row
  * whose first cell has no digits can't be a phone number).

@@ -205,6 +205,7 @@ export async function processInbound(job: InboundJob): Promise<void> {
         contactId: contact.id,
         connectionId,
         flowId: flowRow.id,
+        productId: flowRow.productId,
         state: {},
         status: "ACTIVE",
       },
@@ -214,11 +215,13 @@ export async function processInbound(job: InboundJob): Promise<void> {
   // Mark the lead's source = the scenario that first engaged them (distinguishes
   // real scenario leads from plain inbound messages). `sourceFlowId` is the
   // stable half — `source` is a name and would break on rename, but the CRM
-  // resolves the field schema through the id.
+  // resolves the field schema through the id. `productId` follows the same
+  // first-engagement rule so a lead stays attributed to whichever product's
+  // scenario actually brought them in.
   await prisma.contact.update({
     where: { id: contact.id },
     data: {
-      ...(contact.source ? {} : { source: flowRow.name, sourceFlowId: flowRow.id }),
+      ...(contact.source ? {} : { source: flowRow.name, sourceFlowId: flowRow.id, productId: flowRow.productId }),
       lastContactedAt: new Date(),
     },
   });

@@ -1,5 +1,4 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
 import {
   intervalMonths,
   planAndIntervalFromAmount,
@@ -11,7 +10,6 @@ import {
 } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 import { normalizePhone } from "./audience";
-import { growPlatformProvider } from "./billing";
 import { getPlanCatalog } from "./plan";
 
 /** Add whole months to a date (clamps to end-of-month naturally via Date). */
@@ -26,16 +24,15 @@ function externalId(cb: GrowCallback): string | null {
   return cb.transactionId ?? cb.asmachta ?? cb.transactionToken ?? null;
 }
 
-/** cField2/cField3 when present and valid, else recovered from the charged amount. */
+/**
+ * Recovered from the charged amount alone — the webhook is unauthenticated
+ * (no Grow API/Make call to verify it), so cField2/cField3 aren't trusted;
+ * each plan × interval combination has a fixed, known price.
+ */
 function resolvePlan(
   cb: GrowCallback,
   catalog: Record<PlanId, Plan>,
 ): { plan: PlanId; interval: BillingInterval } | null {
-  const cFieldPlan = cb.cField2 as PlanId | undefined;
-  if (cFieldPlan && cFieldPlan in catalog && cFieldPlan !== "FREE") {
-    const cFieldInterval = (cb.cField3 as BillingInterval | undefined) ?? "MONTHLY";
-    return { plan: cFieldPlan, interval: cFieldInterval };
-  }
   return cb.sum ? planAndIntervalFromAmount(Math.round(Number(cb.sum)), catalog) : null;
 }
 
@@ -238,60 +235,4 @@ export async function claimUnclaimedPayment(orgId: string, identifier: string): 
     paidAt: match.paidAt,
   });
   return { applied: true };
-}
-
-export interface ChargeOrgResult {
-  ok: boolean;
-  error?: "not_configured" | "no_saved_card" | "charge_failed";
-  transactionId?: string;
-}
-
-/**
- * Super-admin: charge an org's previously-saved Grow card token for an
- * arbitrary amount — no payment page/link is shown to the customer. Requires
- * the org to have completed at least one checkout (which saves the token) and
- * the platform's chargeToken webhook to be configured.
- */
-export async function chargeOrgCardToken(
-  orgId: string,
-  sumIls: number,
-  description: string,
-): Promise<ChargeOrgResult> {
-  const sub = await prisma.subscription.findUnique({
-    where: { organizationId: orgId },
-    select: { id: true, growCardToken: true, growCardHolderName: true, growCardHolderPhone: true },
-  });
-  if (!sub?.growCardToken || !sub.growCardHolderName || !sub.growCardHolderPhone) {
-    return { ok: false, error: "no_saved_card" };
-  }
-
-  const provider = await growPlatformProvider();
-  if (!provider) return { ok: false, error: "not_configured" };
-
-  try {
-    const { transactionId } = await provider.chargeToken({
-      cardToken: sub.growCardToken,
-      sumIls,
-      description,
-      uniqueIdentifier: `admin-charge-${orgId}-${randomUUID()}`,
-      payerName: sub.growCardHolderName,
-      payerPhone: sub.growCardHolderPhone,
-      organizationId: orgId,
-    });
-
-    await prisma.payment.create({
-      data: {
-        organizationId: orgId,
-        subscriptionId: sub.id,
-        amountIls: sumIls,
-        status: "PAID",
-        growTransactionId: transactionId ?? `admin-charge-${randomUUID()}`,
-        paidAt: new Date(),
-      },
-    });
-
-    return { ok: true, transactionId };
-  } catch {
-    return { ok: false, error: "charge_failed" };
-  }
 }

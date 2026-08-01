@@ -60,7 +60,6 @@ export function CheckoutButton({
       });
       const data = await res.json();
       if (data.url) setUrl(data.url);
-      else if (data.error === "missing_phone") setError(he.checkoutMissingPhone);
       else setError(he.checkoutGenericError);
     } catch {
       setError(he.checkoutGenericError);

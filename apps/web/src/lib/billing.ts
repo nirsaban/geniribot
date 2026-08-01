@@ -1,9 +1,8 @@
 import "server-only";
-import { GrowProvider, type GrowConfig } from "@kesher/billing";
+import type { BillingInterval, PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
-import { getSecret } from "./secrets";
 
-/** The platform (super-admin) organization that owns the Grow credentials. */
+/** The platform (super-admin) organization that owns the Grow payment links. */
 export async function platformOrgId(): Promise<string | null> {
   const o = await prisma.organization.findUnique({
     where: { slug: "platform" },
@@ -12,60 +11,47 @@ export async function platformOrgId(): Promise<string | null> {
   return o?.id ?? null;
 }
 
-/** Grow-via-Make webhook URLs, as stored in the per-org Secret store. */
-export const GROW_SECRETS = {
-  createCheckoutWebhookUrl: "grow_make_create_checkout_webhook_url",
-  /** Wraps Grow's getPaymentProcessInfo + approveTransaction in one scenario. */
-  verifyWebhookUrl: "grow_make_verify_webhook_url",
-  chargeTokenWebhookUrl: "grow_make_charge_token_webhook_url",
-} as const;
+export type PaidPlanId = Exclude<PlanId, "FREE">;
 
-/** Build the tenant's Grow-via-Make config from their pasted webhook URLs, or null. */
-export async function growConfigForOrg(org: string): Promise<GrowConfig | null> {
-  const [createCheckoutWebhookUrl, verifyWebhookUrl, chargeTokenWebhookUrl] = await Promise.all([
-    getSecret(org, GROW_SECRETS.createCheckoutWebhookUrl),
-    getSecret(org, GROW_SECRETS.verifyWebhookUrl),
-    getSecret(org, GROW_SECRETS.chargeTokenWebhookUrl),
-  ]);
-  if (!createCheckoutWebhookUrl || !verifyWebhookUrl) return null;
+export type GrowPaymentUrls = Record<PaidPlanId, Record<BillingInterval, string | null>>;
+
+/**
+ * The static Grow-hosted payment pages, one per plan × billing interval —
+ * each has its own fixed price configured directly in Grow (super admin
+ * pastes the link once it's created there; see /admin).
+ */
+export async function getGrowPaymentUrls(): Promise<GrowPaymentUrls> {
+  const org = await platformOrgId();
+  const row = org
+    ? await prisma.organization.findUnique({
+        where: { id: org },
+        select: {
+          growPaymentUrlStarterMonthly: true,
+          growPaymentUrlStarterAnnual: true,
+          growPaymentUrlProMonthly: true,
+          growPaymentUrlProAnnual: true,
+        },
+      })
+    : null;
   return {
-    createCheckoutWebhookUrl,
-    verifyWebhookUrl,
-    chargeTokenWebhookUrl: chargeTokenWebhookUrl ?? undefined,
+    STARTER: { MONTHLY: row?.growPaymentUrlStarterMonthly ?? null, ANNUAL: row?.growPaymentUrlStarterAnnual ?? null },
+    PRO: { MONTHLY: row?.growPaymentUrlProMonthly ?? null, ANNUAL: row?.growPaymentUrlProAnnual ?? null },
   };
 }
 
-export async function growProviderForOrg(org: string): Promise<GrowProvider | null> {
-  const cfg = await growConfigForOrg(org);
-  return cfg ? new GrowProvider(cfg) : null;
-}
-
-/** Grow provider using the PLATFORM credentials (set by the super admin). */
-export async function growPlatformProvider(): Promise<GrowProvider | null> {
-  const org = await platformOrgId();
-  return org ? growProviderForOrg(org) : null;
-}
-
-export async function growPlatformConfigured(): Promise<boolean> {
-  const org = await platformOrgId();
-  return org ? Boolean(await growConfigForOrg(org)) : false;
+export async function growPaymentUrlFor(plan: PaidPlanId, interval: BillingInterval): Promise<string | null> {
+  const urls = await getGrowPaymentUrls();
+  return urls[plan][interval];
 }
 
 /**
- * Fallback used until the super admin sets one in /admin (or the platform
- * org isn't provisioned yet, e.g. a fresh dev database).
+ * Tag a Grow payment link with the organization it's for — Grow echoes
+ * custom fields back on the notifyUrl callback, which is how
+ * `applyGrowPayment` knows which org to activate (see
+ * `apps/web/src/lib/subscriptions.ts`).
  */
-const DEFAULT_GROW_PAYMENT_URL =
-  "https://pay.grow.link/MTAzNTk4~eed6c18dda5397dbf9505860c9b4d429-Mzc0Mjc0Mw";
-
-/**
- * The static hosted Grow payment page (both paid plans, picked there) that
- * the landing page and the in-app plan picker link to when per-org API
- * checkout isn't configured. Super-admin editable in /admin.
- */
-export async function growPaymentUrl(): Promise<string> {
-  const org = await platformOrgId();
-  if (!org) return DEFAULT_GROW_PAYMENT_URL;
-  const row = await prisma.organization.findUnique({ where: { id: org }, select: { growPaymentUrl: true } });
-  return row?.growPaymentUrl || DEFAULT_GROW_PAYMENT_URL;
+export function withOrgField(url: string, orgId: string): string {
+  const u = new URL(url);
+  u.searchParams.set("cField1", orgId);
+  return u.toString();
 }

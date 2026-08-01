@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
-import { planPrice, type BillingInterval, type PlanId } from "@kesher/billing";
-import { prisma } from "@kesher/db";
-import { toIsraeliLocalPhone } from "@/lib/audience";
-import { withBase } from "@/lib/basePath";
-import { growPaymentUrl, growPlatformProvider } from "@/lib/billing";
+import type { BillingInterval, PlanId } from "@kesher/billing";
+import { growPaymentUrlFor, withOrgField, type PaidPlanId } from "@/lib/billing";
 import { getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Tenant starts a paid-plan checkout — returns the Grow payment URL for the
- * client to embed in an iframe (kept on-site) instead of a full redirect.
- * Falls back to the static hosted page (tagged with our custom fields) until
- * per-org API checkout is configured, same as the old `checkoutAction`.
+ * Tenant starts a paid-plan checkout — returns the static Grow-hosted
+ * payment page URL for the client to embed in an iframe (kept on-site),
+ * tagged with the org id so the notifyUrl webhook can activate the right
+ * tenant once paid.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -26,44 +23,8 @@ export async function POST(req: Request) {
   }
   const interval: BillingInterval = rawInterval === "ANNUAL" ? "ANNUAL" : "MONTHLY";
 
-  const provider = await growPlatformProvider();
-  if (!provider) {
-    const url = new URL(await growPaymentUrl());
-    url.searchParams.set("cField1", session.org);
-    url.searchParams.set("cField2", plan);
-    url.searchParams.set("cField3", interval);
-    return NextResponse.json({ url: url.toString() });
-  }
+  const url = await growPaymentUrlFor(plan as PaidPlanId, interval);
+  if (!url) return NextResponse.json({ error: "not_configured" }, { status: 400 });
 
-  // Grow requires a full name + Israeli mobile number to create the payment
-  // link — pull them from the signed-in user rather than asking again.
-  const [user, org] = await Promise.all([
-    prisma.user.findUnique({ where: { id: session.sub }, select: { name: true, email: true, notifyPhone: true } }),
-    prisma.organization.findUnique({ where: { id: session.org }, select: { name: true } }),
-  ]);
-  const localPhone = user?.notifyPhone ? toIsraeliLocalPhone(user.notifyPhone) : null;
-  if (!localPhone) {
-    return NextResponse.json({ error: "missing_phone" }, { status: 400 });
-  }
-
-  const base = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";
-  const cycle = interval === "ANNUAL" ? "שנתי" : "חודשי";
-  try {
-    const { url } = await provider.createCheckout({
-      plan,
-      interval,
-      sumIls: planPrice(plan, interval, catalog),
-      description: `GeniriBot — מסלול ${catalog[plan].name} (${cycle})`,
-      organizationId: session.org,
-      notifyUrl: `${base}${withBase("/api/billing/grow/webhook")}`,
-      successUrl: `${base}${withBase("/dashboard/billing?paid=1")}`,
-      cancelUrl: `${base}${withBase("/dashboard/billing?cancelled=1")}`,
-      payerName: user?.name ?? org?.name ?? "לקוח GeniriBot",
-      payerPhone: localPhone,
-      payerEmail: user?.email,
-    });
-    return NextResponse.json({ url });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-  }
+  return NextResponse.json({ url: withOrgField(url, session.org) });
 }

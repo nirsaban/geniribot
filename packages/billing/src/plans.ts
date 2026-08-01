@@ -9,6 +9,7 @@ export interface PlanLimits {
   connections: number;
   contacts: number;
   monthlyMessages: number;
+  products: number;
 }
 
 export interface Plan {
@@ -31,7 +32,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "חינם",
     priceIls: 0,
     annualIls: 0,
-    limits: { connections: 1, contacts: 100, monthlyMessages: 500 },
+    limits: { connections: 1, contacts: 100, monthlyMessages: 500, products: 1 },
     features: ["מספר וואטסאפ אחד", "עד 100 לידים", "בוט וקביעת פגישות"],
   },
   STARTER: {
@@ -39,7 +40,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "בסיסי",
     priceIls: 99,
     annualIls: 990, // 99 × 10 (2 months free)
-    limits: { connections: 2, contacts: 2000, monthlyMessages: 5000 },
+    limits: { connections: 2, contacts: 2000, monthlyMessages: 5000, products: 5 },
     features: ["2 מספרי וואטסאפ", "עד 2,000 לידים", "סנכרון יומן Google", "תזכורות אוטומטיות"],
   },
   PRO: {
@@ -47,7 +48,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "מקצועי",
     priceIls: 299,
     annualIls: 2990, // 299 × 10 (2 months free)
-    limits: { connections: 10, contacts: 50000, monthlyMessages: 100000 },
+    limits: { connections: 10, contacts: 50000, monthlyMessages: 100000, products: 50 },
     features: ["עד 10 מספרים", "עד 50,000 לידים", "כל היכולות", "תמיכה מועדפת"],
   },
 };

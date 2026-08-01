@@ -35,14 +35,18 @@ model Organization {
   subscription  Subscription?
   payments      Payment[]
   messageUsage  MessageUsage[]
+  products      Product[]
   onboardedAt   DateTime?
   calcomLink    String?
   /**
-   * Static hosted Grow payment page (both paid plans, picked on Grow's own
-   * page) — set on the platform org only, super-admin editable. Used until
-   * per-org API-driven checkout (pageCode/userId/apiKey) is fully live.
+   * Static hosted Grow payment pages, one per plan × billing interval (each
+   * has its own fixed price set directly in Grow) — set on the platform org
+   * only, super-admin editable.
    */
-  growPaymentUrl String?
+  growPaymentUrlStarterMonthly String?
+  growPaymentUrlStarterAnnual  String?
+  growPaymentUrlProMonthly    String?
+  growPaymentUrlProAnnual     String?
 
   /**
    * Automatic follow-up nudges for leads that went quiet. Off by default —
@@ -144,6 +148,7 @@ model PlanConfig {
   connections     Int
   contacts        Int
   monthlyMessages Int
+  products        Int      @default(1)
   updatedAt       DateTime @updatedAt
 }
 
@@ -344,12 +349,50 @@ model Flow {
    * number. Persisting it makes the fields a fixed contract for the campaign.
    */
   fieldSchema    Json?
+  /** The product/service this scenario sells, if any — null = a general org-wide flow. */
+  productId      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+  @@index([productId])
+}
+
+// ---------- Products / services ----------
+model Product {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  /** URL-safe, unique per org — used for the public product page (/p/[orgSlug]/[slug]). */
+  slug           String
+  description    String?
+  /** VAT-included ILS, matching how plan prices are stored. Null = "contact us" / no fixed price. */
+  priceIls       Int?
+  status         ProductStatus @default(DRAFT)
+  /** Cloudinary secure delivery URLs, in display order. */
+  images         String[]      @default([])
+  /** Freeform extra spec rows shown on the public page (e.g. { "צבע": "אדום" }) — same pattern as Contact.fields. */
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  flows         Flow[]
+  contacts      Contact[]
+  conversations Conversation[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([organizationId, status])
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
 }
 
 // ---------- Contacts / leads ----------
@@ -377,6 +420,8 @@ model Contact {
    * rename; this is what the CRM resolves the field schema through.
    */
   sourceFlowId   String?
+  /** The product/service this lead came in for — copied from the engaging flow's productId. */
+  productId      String?
   /**
    * What the agent recorded after the sales call — written by a human in the
    * dashboard, never generated. Separate from `notes` because every lead has at
@@ -399,6 +444,7 @@ model Contact {
 
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   owner         User?          @relation("ContactOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  product       Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
   conversations Conversation[]
   appointments  Appointment[]
   notes         LeadNote[]
@@ -409,6 +455,7 @@ model Contact {
   @@index([organizationId, status])
   @@index([organizationId, ownerUserId])
   @@index([organizationId, createdAt])
+  @@index([organizationId, productId])
 }
 
 enum LeadStatus {
@@ -475,6 +522,7 @@ enum ActivityKind {
   APPOINTMENT_CANCELLED
   CONVERSATION_COMPLETED
   FOLLOW_UP_SENT
+  PRODUCT_ASSIGNED
 }
 
 // ---------- Conversations (flow-run state) ----------
@@ -484,6 +532,8 @@ model Conversation {
   contactId      String
   connectionId   String
   flowId         String?
+  /** Denormalized from the flow that started this conversation, for fast per-product analytics. */
+  productId      String?
   currentNodeId  String?
   state          Json        @default("{}")
   status         ConvoStatus @default(ACTIVE)
@@ -492,10 +542,12 @@ model Conversation {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   messages     Message[]
 
   @@index([organizationId])
   @@index([contactId])
+  @@index([productId])
 }
 
 enum ConvoStatus {

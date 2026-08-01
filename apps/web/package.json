@@ -20,6 +20,7 @@
     "@kesher/whatsapp": "workspace:*",
     "@xyflow/react": "^12",
     "bullmq": "^5.34.6",
+    "cloudinary": "^2",
     "ioredis": "^5.4.2",
     "next": "^15.1.4",
     "qrcode": "^1.5.4",

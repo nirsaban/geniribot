@@ -2,8 +2,8 @@ import { he } from "@/lib/he";
 
 /**
  * Super-admin "paste your Meta app config" form for WhatsApp Embedded Signup.
- * Mirrors GrowSecrets: shows masked status of already-saved values (never the
- * real value) and inputs to set/replace them. The save action encrypts on write.
+ * Shows masked status of already-saved values (never the real value) and
+ * inputs to set/replace them. The save action encrypts on write.
  */
 export function MetaSecrets({
   appIdMask,
