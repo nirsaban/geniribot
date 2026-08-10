@@ -119,6 +119,8 @@ export const he = {
   disconnect: "נתק",
   backToDashboard: "→ חזרה ללוח הבקרה",
   noConnections: "עדיין אין חיבורים. הוסף/י אחד כדי להתחיל.",
+  errGateway: "שירות הוואטסאפ לא זמין כרגע ולכן לא ניתן להתחיל התחברות. נסו/י שוב בעוד רגע.",
+  errCloudFields: "צריך למלא מזהה מספר (Phone Number ID) וטוקן גישה.",
   statusLabel: {
     PENDING: "ממתין",
     QR: "ממתין לסריקה",

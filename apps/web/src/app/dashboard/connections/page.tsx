@@ -17,9 +17,14 @@ import { QrPoller } from "./QrPoller";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConnectionsPage() {
+export default async function ConnectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ err?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/login");
+  const { err } = await searchParams;
 
   const connections = await prisma.whatsAppConnection.findMany({
     where: { organizationId: session.org },
@@ -34,6 +39,12 @@ export default async function ConnectionsPage() {
   return (
     <>
       <PageHeader title={he.connectionsTitle} subtitle={he.connectionsSubtitle} />
+      {/* Failed actions redirect here with ?err — without this they looked like nothing happened. */}
+      {err && (
+        <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+          {err === "cloud_fields" ? he.errCloudFields : he.errGateway}
+        </div>
+      )}
       <BotStatus r={readiness} />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2">

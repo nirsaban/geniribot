@@ -31,6 +31,18 @@ async function requireOrg(): Promise<string> {
   return session.org;
 }
 
+/**
+ * Ask the gateway to (re)start pairing. Reports failure instead of swallowing
+ * it: a down gateway used to leave the button doing nothing at all, with the
+ * connection stuck in whatever state it was in.
+ */
+async function startPairing(id: string, org: string): Promise<boolean> {
+  return gatewayConnect(id, org).then(
+    () => true,
+    () => false,
+  );
+}
+
 /** Verify a connection belongs to the caller's org (tenant guard). */
 async function ownedConnection(org: string, id: string) {
   const conn = await prisma.whatsAppConnection.findFirst({
@@ -50,10 +62,9 @@ export async function createConnectionAction(formData: FormData): Promise<void> 
     data: { organizationId: org, label, provider: "baileys", defaultFlowId: await activeFlowId(org) },
   });
 
-  await gatewayConnect(conn.id, org).catch(() => {
-    /* gateway may be starting; the page can retry via reconnect */
-  });
+  const started = await startPairing(conn.id, org);
   revalidatePath("/dashboard/connections");
+  if (!started) redirect("/dashboard/connections?err=gateway");
 }
 
 /** Create an official WhatsApp Cloud API connection (no QR — token-based). */
@@ -93,8 +104,9 @@ export async function reconnectAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
   const id = String(formData.get("id") ?? "");
   await ownedConnection(org, id);
-  await gatewayConnect(id, org).catch(() => {});
+  const started = await startPairing(id, org);
   revalidatePath("/dashboard/connections");
+  if (!started) redirect("/dashboard/connections?err=gateway");
 }
 
 export async function logoutConnectionAction(formData: FormData): Promise<void> {

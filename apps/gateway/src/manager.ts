@@ -70,6 +70,18 @@ export class SessionManager {
       return;
     }
     this.liveState.set(connectionId, { status: "pending" });
+    // Persist PENDING as well, not just in memory: the dashboard decides
+    // whether to render the QR panel from the DB row, so re-pairing a
+    // LOGGED_OUT connection would otherwise never reveal a QR and the
+    // "reconnect" button would look like it did nothing.
+    // Rows already CONNECTED are left alone — resuming a live session on boot
+    // must not flap the bot's status through PENDING.
+    await prisma.whatsAppConnection
+      .updateMany({
+        where: { id: connectionId, status: { not: "CONNECTED" } },
+        data: { status: "PENDING" },
+      })
+      .catch((err) => log.error({ err, connectionId }, "pending persist failed"));
     await this.provider.connect(connectionId);
   }
 
@@ -163,9 +175,14 @@ export class SessionManager {
     );
   }
 
-  private onQr(evt: QrEvent): void {
+  private async onQr(evt: QrEvent): Promise<void> {
     const prev = this.liveState.get(evt.connectionId) ?? { status: "qr" as ConnectionStatus };
     this.liveState.set(evt.connectionId, { ...prev, status: "qr", qr: evt.qr });
+    // The QR itself stays in memory (it rotates every ~20s), but the status has
+    // to reach the DB — that's what makes the dashboard show the QR panel.
+    await prisma.whatsAppConnection
+      .update({ where: { id: evt.connectionId }, data: { status: "QR" } })
+      .catch((err) => log.error({ err, connectionId: evt.connectionId }, "qr status persist failed"));
   }
 
   private async onStatus(evt: StatusEvent): Promise<void> {
