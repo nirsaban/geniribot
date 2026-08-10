@@ -39,14 +39,13 @@ model Organization {
   onboardedAt   DateTime?
   calcomLink    String?
   /**
-   * Static hosted Grow payment pages, one per plan × billing interval (each
-   * has its own fixed price set directly in Grow) — set on the platform org
-   * only, super-admin editable.
+   * THE Grow-hosted payment page — one link for the whole platform, selling
+   * one product per paid plan as a הוראת קבע. Set on the platform org only,
+   * super-admin editable; every "upgrade" CTA points here. We never generate
+   * per-org links, so a payment is tied to an account by the callback alone
+   * (see `UnclaimedGrowPayment`).
    */
-  growPaymentUrlStarterMonthly String?
-  growPaymentUrlStarterAnnual  String?
-  growPaymentUrlProMonthly    String?
-  growPaymentUrlProAnnual     String?
+  growPaymentUrl String?
 
   /**
    * Automatic follow-up nudges for leads that went quiet. Off by default —
@@ -143,8 +142,8 @@ enum Plan {
  */
 model PlanConfig {
   id              Plan     @id
-  priceIls        Int
-  annualIls       Int
+  /** Monthly VAT-included price — must match this plan's product price on the Grow page. */
+  priceIls        Decimal  @db.Decimal(10, 2)
   connections     Int
   contacts        Int
   monthlyMessages Int
@@ -157,18 +156,23 @@ model PlanConfig {
 /**
  * A tenant's paid subscription. At most one per organization (the current one).
  * `Organization.plan` stays as the denormalized quick-read; this table is the
- * source of truth for billing period, renewal, and cancel state. Recurring
- * charges are driven by Grow's managed recurring payment page — each successful
- * charge fires our webhook, which extends `currentPeriodEnd` and records a Payment.
+ * source of truth for billing period and cancel state.
+ *
+ * A purchase is a Grow הוראת קבע of `paymentsCount` monthly charges, and the
+ * whole period is opened up front: the first charge sets `currentPeriodEnd` to
+ * start + `paymentsCount` months. The remaining charges arrive month by month
+ * and are recorded as `Payment` rows for revenue, but do not extend the period
+ * again — see `applyGrowPayment`.
  */
 model Subscription {
   id             String             @id @default(cuid())
   organizationId String             @unique
   plan           Plan
   status         SubscriptionStatus @default(PENDING)
-  interval       BillingInterval    @default(MONTHLY)
-  /** Charge amount per period, ILS, VAT-included. */
-  priceIls       Int
+  /** Monthly payments the standing order was opened for = months of access granted. */
+  paymentsCount  Int                @default(1)
+  /** Amount of a single monthly charge, ILS, VAT-included. */
+  priceIls       Decimal            @db.Decimal(10, 2)
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
   /** When true the subscription lapses to FREE at period end instead of renewing. */
@@ -199,11 +203,6 @@ enum SubscriptionStatus {
   CANCELED
 }
 
-enum BillingInterval {
-  MONTHLY
-  ANNUAL
-}
-
 /**
  * One Grow charge (first payment or a recurring renewal). This is the revenue
  * ledger and receipt history. Deduped by `growTransactionId` so a replayed
@@ -214,11 +213,13 @@ model Payment {
   organizationId String
   subscriptionId String?
   /** Charged amount, ILS, VAT-included. */
-  amountIls      Int
+  amountIls      Decimal       @db.Decimal(10, 2)
   status         PaymentStatus @default(PENDING)
   /** Grow transaction id — unique per real charge; the idempotency key. */
   growTransactionId String?    @unique
   growAsmachta      String?
+  /** Grow's process id — ties the monthly charges of one standing order together. */
+  growProcessId     String?
   cardSuffix        String?
   cardBrand         String?
   /** Grow-issued invoice/receipt URL, when available. */
@@ -256,18 +257,38 @@ model WebhookEvent {
 }
 
 /**
- * A real Grow charge whose callback carried no organizationId (cField1) —
- * e.g. a payment made through the static hosted page, or "pay first, then
- * register" from the landing page. Plan/interval are recovered from the
- * charged amount. Sits unclaimed until the payer registers or logs in and
- * matches it by the phone/email they paid with (see `claimUnclaimedPayment`).
+ * Every raw Grow callback body, successful or not.
+ *
+ * `WebhookEvent` is the idempotency ledger for charges we acted on; this is
+ * the diagnostic tape next to it. With a single untagged payment link the
+ * callback is the whole integration, and Grow's exact field names for a
+ * הוראת קבע can only be confirmed against a real delivery — so keep the
+ * unparsed body and render it in /admin.
+ */
+model GrowCallbackLog {
+  id        String   @id @default(cuid())
+  payload   Json
+  /** Did Grow report this as a successful charge? Failures are kept too. */
+  success   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/**
+ * A real Grow charge we couldn't attach to an account yet. Since there is a
+ * single untagged payment link, this is the NORMAL path, not an edge case:
+ * every payment lands here first and is claimed by the phone/email the payer
+ * used, as soon as they register or log in (see `claimUnclaimedPayment`).
+ * Plan and length are recovered from the callback (`growPlan`/`growPayments`).
  */
 model UnclaimedGrowPayment {
   id                String          @id @default(cuid())
   growTransactionId String          @unique
   plan              Plan
-  interval          BillingInterval
-  amountIls         Int
+  /** Monthly payments the standing order was opened for = months to grant on claim. */
+  paymentsCount     Int             @default(1)
+  amountIls         Decimal         @db.Decimal(10, 2)
   payerPhone        String?
   payerEmail        String?
   cardSuffix        String?

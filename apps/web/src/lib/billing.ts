@@ -1,8 +1,7 @@
 import "server-only";
-import type { BillingInterval, PlanId } from "@kesher/billing";
 import { prisma } from "@kesher/db";
 
-/** The platform (super-admin) organization that owns the Grow payment links. */
+/** The platform (super-admin) organization that owns the Grow payment link. */
 export async function platformOrgId(): Promise<string | null> {
   const o = await prisma.organization.findUnique({
     where: { slug: "platform" },
@@ -11,47 +10,27 @@ export async function platformOrgId(): Promise<string | null> {
   return o?.id ?? null;
 }
 
-export type PaidPlanId = Exclude<PlanId, "FREE">;
-
-export type GrowPaymentUrls = Record<PaidPlanId, Record<BillingInterval, string | null>>;
+/**
+ * The live GeniriBot payment page. Used when the platform org has no link
+ * configured yet, so a fresh install still sells; the super admin can point
+ * /admin at a different page at any time.
+ */
+export const DEFAULT_GROW_PAYMENT_URL =
+  "https://pay.grow.link/MTAzNTk4~ff8a7093f30cddeb71cb84e4cbdb003e-MzgxNzY5Nw";
 
 /**
- * The static Grow-hosted payment pages, one per plan × billing interval —
- * each has its own fixed price configured directly in Grow (super admin
- * pastes the link once it's created there; see /admin).
+ * THE Grow payment page — one link, both plans, sold as a הוראת קבע of 1–12
+ * monthly payments. It is deliberately NOT parameterised per org or per plan:
+ * the payer picks their product and length on Grow's page, and the callback
+ * is what tells us who bought what (see `applyGrowPayment`).
  */
-export async function getGrowPaymentUrls(): Promise<GrowPaymentUrls> {
+export async function growPaymentUrl(): Promise<string> {
   const org = await platformOrgId();
   const row = org
     ? await prisma.organization.findUnique({
         where: { id: org },
-        select: {
-          growPaymentUrlStarterMonthly: true,
-          growPaymentUrlStarterAnnual: true,
-          growPaymentUrlProMonthly: true,
-          growPaymentUrlProAnnual: true,
-        },
+        select: { growPaymentUrl: true },
       })
     : null;
-  return {
-    STARTER: { MONTHLY: row?.growPaymentUrlStarterMonthly ?? null, ANNUAL: row?.growPaymentUrlStarterAnnual ?? null },
-    PRO: { MONTHLY: row?.growPaymentUrlProMonthly ?? null, ANNUAL: row?.growPaymentUrlProAnnual ?? null },
-  };
-}
-
-export async function growPaymentUrlFor(plan: PaidPlanId, interval: BillingInterval): Promise<string | null> {
-  const urls = await getGrowPaymentUrls();
-  return urls[plan][interval];
-}
-
-/**
- * Tag a Grow payment link with the organization it's for — Grow echoes
- * custom fields back on the notifyUrl callback, which is how
- * `applyGrowPayment` knows which org to activate (see
- * `apps/web/src/lib/subscriptions.ts`).
- */
-export function withOrgField(url: string, orgId: string): string {
-  const u = new URL(url);
-  u.searchParams.set("cField1", orgId);
-  return u.toString();
+  return row?.growPaymentUrl?.trim() || DEFAULT_GROW_PAYMENT_URL;
 }

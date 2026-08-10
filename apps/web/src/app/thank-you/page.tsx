@@ -2,56 +2,65 @@ import Link from "next/link";
 import { prisma } from "@kesher/db";
 import { LogoMark } from "@/components/Logo";
 import { he } from "@/lib/he";
+import { getPlanCatalog } from "@/lib/plan";
 import { getSession } from "@/lib/session";
 import { claimUnclaimedPayment } from "@/lib/subscriptions";
-import { claimPaymentAction } from "@/app/dashboard/billing/actions";
+import { ClaimWatcher } from "./ClaimWatcher";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Redirect target after a Grow hosted-payment-page checkout (configured as
- * that page's success URL in the Grow dashboard). The payment itself is
- * never re-verified here (that already happened in the webhook) — this page
- * only tries to ATTACH an already-recorded payment to an account:
- *  - logged in (paid via the in-app "upgrade" flow): try the account's own
- *    email automatically.
- *  - logged out (paid straight from the landing page): send them to
- *    register, where the same claim happens with the phone/email they paid
- *    with (see registerAction).
+ * Where Grow returns the payer after a successful checkout (set as the
+ * payment link's return URL in Grow's dashboard).
+ *
+ * The money is never verified here — that already happened in the webhook.
+ * This page only ATTACHES an already-recorded payment to an account, because
+ * the payment link is untagged and a callback arrives knowing only who paid,
+ * not which tenant they are:
+ *
+ *  - signed in: match on the account's own details, retrying for a few
+ *    seconds since the browser often arrives before Grow's callback does,
+ *    then fall back to asking which phone/email they paid with.
+ *  - signed out (paid straight from the landing page): send them to register,
+ *    where the same match runs against the details they enter.
  */
 export default async function ThankYouPage() {
   const session = await getSession();
   if (!session) return <LoggedOutThankYou />;
 
-  const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { email: true } });
-  const claimed = user ? (await claimUnclaimedPayment(session.org, user.email)).applied : false;
+  // One attempt server-side so the common case renders already-claimed, with
+  // no spinner and no round trip; ClaimWatcher takes over only if it missed.
+  const user = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { email: true },
+  });
+  const result = user ? await claimUnclaimedPayment(session.org, user.email) : { applied: false };
+
+  let initial = { claimed: false } as {
+    claimed: boolean;
+    plan?: string | null;
+    months?: number;
+    until?: string | null;
+  };
+  if (result.applied) {
+    const [catalog, subscription] = await Promise.all([
+      getPlanCatalog(),
+      prisma.subscription.findUnique({
+        where: { organizationId: session.org },
+        select: { currentPeriodEnd: true },
+      }),
+    ]);
+    initial = {
+      claimed: true,
+      plan: result.plan ? catalog[result.plan].name : null,
+      months: result.months ?? 1,
+      until: subscription?.currentPeriodEnd?.toISOString() ?? null,
+    };
+  }
 
   return (
     <Shell>
-      {claimed ? (
-        <>
-          <p className="text-sm leading-relaxed text-slate-600">{he.thankYouClaimedBody}</p>
-          <Link href="/dashboard/billing" className="btn-primary mt-6 block w-full py-2.5">
-            {he.thankYouGoToDashboard}
-          </Link>
-        </>
-      ) : (
-        <>
-          <p className="text-sm leading-relaxed text-slate-600">{he.thankYouNotFoundBody}</p>
-          <form action={claimPaymentAction} className="mt-4 space-y-2">
-            <input
-              name="identifier"
-              placeholder={he.claimPaymentLabel}
-              dir="ltr"
-              className="input w-full text-left"
-            />
-            <button className="btn-primary w-full py-2.5">{he.thankYouTryMatch}</button>
-          </form>
-          <Link href="/dashboard/billing" className="mt-3 block text-sm text-slate-500 hover:underline">
-            {he.thankYouGoToDashboard}
-          </Link>
-        </>
-      )}
+      <ClaimWatcher initial={initial} />
     </Shell>
   );
 }
@@ -63,6 +72,7 @@ function LoggedOutThankYou() {
       <Link href="/register" className="btn-primary mt-6 block w-full py-2.5">
         {he.thankYouCta}
       </Link>
+      <p className="mt-4 text-xs text-slate-400">{he.thankYouRegisterHint}</p>
       <p className="mt-4 text-sm text-slate-500">
         {he.thankYouHaveAccount}{" "}
         <Link href="/login" className="font-semibold text-brand">

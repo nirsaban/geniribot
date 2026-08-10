@@ -1,61 +1,25 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
-import type { BillingInterval, Plan, PlanId } from "@kesher/billing";
-import type { GrowPaymentUrls, PaidPlanId } from "@/lib/billing";
+import { formatIls, MAX_PAYMENTS, type Plan, type PlanId } from "@kesher/billing";
 import { landing } from "./copy";
 
 const ORDER: PlanId[] = ["FREE", "STARTER", "PRO"];
 const c = landing.pricing;
 
-export function Pricing({
-  paymentUrls,
-  plans,
-}: {
-  paymentUrls: GrowPaymentUrls;
-  plans: Record<PlanId, Plan>;
-}) {
-  const [interval, setInterval] = useState<BillingInterval>("MONTHLY");
-  const annual = interval === "ANNUAL";
-
+/**
+ * Public pricing. Paid plans link straight to the single Grow payment page —
+ * the payer chooses the plan's product and how many monthly payments of the
+ * הוראת קבע they want there, and can pay before they have an account at all
+ * (the payment is matched to them when they register).
+ */
+export function Pricing({ paymentUrl, plans }: { paymentUrl: string; plans: Record<PlanId, Plan> }) {
   return (
     <div>
-      {/* Monthly / annual toggle */}
-      <div className="mb-10 flex items-center justify-center gap-3">
-        <span className={!annual ? "font-semibold text-white" : "text-slate-400"}>{c.monthly}</span>
-        <button
-          type="button"
-          onClick={() => setInterval(annual ? "MONTHLY" : "ANNUAL")}
-          className="relative h-7 w-14 rounded-full bg-slate-700 transition-colors data-[on=true]:bg-cyan-500"
-          data-on={annual}
-          aria-label="toggle billing interval"
-        >
-          <span
-            className="absolute top-1 h-5 w-5 rounded-full bg-white transition-all"
-            style={{ insetInlineStart: annual ? "0.25rem" : "2.0rem" }}
-          />
-        </button>
-        <span className={annual ? "font-semibold text-white" : "text-slate-400"}>{c.annual}</span>
-        <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-xs font-semibold text-cyan-300">
-          {c.annualHint}
-        </span>
-      </div>
-
       <div className="grid gap-6 md:grid-cols-3">
         {ORDER.map((id) => {
           const plan = plans[id];
           const featured = id === "STARTER";
           const isFree = id === "FREE";
-          const price = isFree ? 0 : annual ? plan.annualIls : plan.priceIls;
-          // Free: login (existing users) — the billing page offers the plan
-          // choice again right after. Paid: straight to the Grow payment page
-          // for this exact plan + interval; people without an account yet
-          // create one after paying. Falls back to login if that link isn't
-          // configured yet.
-          const href = isFree
-            ? "/login?next=/dashboard/billing"
-            : paymentUrls[id as PaidPlanId][interval] ?? "/login?next=/dashboard/billing";
+          const href = isFree ? "/login?next=/dashboard/billing" : paymentUrl;
 
           return (
             <div
@@ -76,14 +40,10 @@ export function Pricing({
               <h3 className="text-lg font-bold text-white">{plan.name}</h3>
 
               <div className="mt-4 flex items-end gap-1.5">
-                <span className="text-4xl font-extrabold text-white">₪{price.toLocaleString("he-IL")}</span>
-                {!isFree && (
-                  <span className="pb-1 text-sm text-slate-400">/ {annual ? c.perYear : c.perMonth}</span>
-                )}
+                <span className="text-4xl font-extrabold text-white">₪{formatIls(plan.priceIls)}</span>
+                {!isFree && <span className="pb-1 text-sm text-slate-400">/ {c.perMonth}</span>}
               </div>
-              <p className="mt-1 h-5 text-xs text-slate-500">
-                {isFree ? c.freeForever : annual ? c.billedAnnually : 'כולל מע"מ'}
-              </p>
+              <p className="mt-1 h-5 text-xs text-slate-500">{isFree ? c.freeForever : 'כולל מע"מ'}</p>
 
               <ul className="mt-6 flex-1 space-y-3">
                 {plan.features.map((f) => (
@@ -96,6 +56,7 @@ export function Pricing({
 
               <Link
                 href={href}
+                {...(isFree ? {} : { target: "_blank", rel: "noopener noreferrer" })}
                 className={[
                   "mt-7 inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition",
                   featured
@@ -109,6 +70,8 @@ export function Pricing({
           );
         })}
       </div>
+
+      <p className="mt-10 text-center text-sm text-slate-400">{c.directDebit(MAX_PAYMENTS)}</p>
     </div>
   );
 }

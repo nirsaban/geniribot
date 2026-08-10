@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
-import type { GrowCallback } from "@kesher/billing";
+import { isGrowSuccess, parseGrowCallback } from "@kesher/billing";
+import { prisma } from "@kesher/db";
 import { applyGrowPayment } from "@/lib/subscriptions";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Grow (Meshulam) payment callback — fires on the first charge AND on every
- * recurring renewal of the managed payment page. Our custom field carries
- * cField1 = organizationId (set when we generated the link via /dashboard or
- * /admin; absent for a raw static-page payment, parked as unclaimed).
+ * Grow (Meshulam) payment callback — the ONLY way a payment reaches us.
  *
- * Security: the callback itself is unauthenticated and we do not call back
- * into Grow to verify it (no API/Make integration) — `applyGrowPayment`
- * derives the plan/interval from the charged sum against known plan prices
- * rather than trusting the plan/interval fields directly, and deliveries are
- * deduped by transaction id. This does NOT stop a forged POST carrying a
- * real org id and a sum that matches a real plan price from activating that
- * plan for free — acceptable for now given no live Grow API access, but
- * worth revisiting if that risk matters more later.
+ * There is one untagged hosted payment page for the whole platform, so this
+ * callback carries no organization id and we never send custom fields. What
+ * it does carry is the product bought, how many monthly payments of the
+ * הוראת קבע the payer committed to, and the payer's phone/email — enough to
+ * open the right plan for the right number of months against the right
+ * account (see `applyGrowPayment`). It fires again on every renewal charge.
+ *
+ * Security: the callback is unauthenticated and we do not call back into Grow
+ * to verify it (no API access). Plan and length come from the payload, and
+ * deliveries are deduped by transaction id. A forged POST naming a real
+ * payer's phone/email with a matching product could therefore grant that
+ * payer's org a plan for free — accepted for now, worth revisiting if Grow
+ * API access or a signed callback becomes available.
  */
 export async function POST(req: Request) {
   let flat: Record<string, string> = {};
@@ -32,37 +35,20 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
-  // Grow POSTs form-encoded bracket notation, everything nested under
-  // "data[...]" (and custom fields nested again under "data[customFields][...]")
-  // — the same wrapper shape as its other API responses. Flatten it back out.
-  const raw: GrowCallback = {
-    err: flat["err"],
-    status: flat["data[status]"] ?? flat["status"],
-    statusCode: flat["data[statusCode]"],
-    transactionTypeId: flat["data[transactionTypeId]"],
-    paymentType: flat["data[paymentType]"],
-    sum: flat["data[sum]"],
-    paymentDate: flat["data[paymentDate]"],
-    description: flat["data[description]"],
-    fullName: flat["data[fullName]"],
-    payerPhone: flat["data[payerPhone]"],
-    payerEmail: flat["data[payerEmail]"],
-    processId: flat["data[processId]"],
-    processToken: flat["data[processToken]"],
-    transactionId: flat["data[transactionId]"],
-    transactionToken: flat["data[transactionToken]"],
-    asmachta: flat["data[asmachta]"],
-    cardSuffix: flat["data[cardSuffix]"],
-    cardBrand: flat["data[cardBrand]"],
-    cField1: flat["data[customFields][cField1]"],
-    cField2: flat["data[customFields][cField2]"],
-    cField3: flat["data[customFields][cField3]"],
-  };
 
-  const ok = raw.statusCode === "2" || raw.status === "1" || raw.status === "success";
-  if (!ok) return NextResponse.json({ ok: false, error: "not_successful" }, { status: 400 });
+  const cb = parseGrowCallback(flat);
 
-  const result = await applyGrowPayment(raw);
+  // Keep the raw body regardless of outcome. Grow's exact field names for a
+  // הוראת קבע (how it spells the payments count in particular) can only be
+  // confirmed against a real delivery, and /admin renders these rows.
+  await prisma.growCallbackLog
+    .create({ data: { payload: flat as object, success: isGrowSuccess(cb) } })
+    .catch(() => {});
 
+  if (!isGrowSuccess(cb)) {
+    return NextResponse.json({ ok: false, error: "not_successful" }, { status: 400 });
+  }
+
+  const result = await applyGrowPayment(cb);
   return NextResponse.json({ ok: true, applied: result.applied, reason: result.reason });
 }

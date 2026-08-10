@@ -113,16 +113,14 @@ export const landing = {
   pricing: {
     title: "מחיר פשוט. בלי הפתעות.",
     subtitle: 'כל המחירים כוללים מע"מ. שדרגו או בטלו בכל רגע.',
-    monthly: "חודשי",
-    annual: "שנתי",
-    annualHint: "חסכו חודשיים",
     perMonth: "לחודש",
-    perYear: "לשנה",
-    billedAnnually: 'מחויב שנתית · כולל מע"מ',
     popular: "הכי פופולרי",
     ctaFree: "התחילו בחינם",
     ctaPaid: "התחילו עכשיו",
     freeForever: "חינם לתמיד",
+    /** The Grow page sells the plan as a standing order of 1–max monthly payments. */
+    directDebit: (max: number) =>
+      `התשלום בהוראת קבע — בוחרים בעמוד התשלום עד כמה חודשים מראש (עד ${max} תשלומים), והמסלול נפתח לכל התקופה הזו.`,
   },
 
   faqTitle: "שאלות נפוצות",

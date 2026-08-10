@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
-import { getGrowPaymentUrls } from "@/lib/billing";
+import { growPaymentUrl } from "@/lib/billing";
 import { he } from "@/lib/he";
 import { getPlanCatalog } from "@/lib/plan";
 import { landing } from "./copy";
@@ -278,7 +278,7 @@ function Features() {
 
 /* ---------------- pricing ---------------- */
 async function Pricingsection() {
-  const [paymentUrls, plans] = await Promise.all([getGrowPaymentUrls(), getPlanCatalog()]);
+  const [paymentUrl, plans] = await Promise.all([growPaymentUrl(), getPlanCatalog()]);
   return (
     <section id="pricing" className="relative z-10 mx-auto max-w-6xl px-5 py-24">
       <SectionHead
@@ -287,7 +287,7 @@ async function Pricingsection() {
         subtitle={landing.pricing.subtitle}
       />
       <div className="mt-14">
-        <Pricing paymentUrls={paymentUrls} plans={plans} />
+        <Pricing paymentUrl={paymentUrl} plans={plans} />
       </div>
     </section>
   );

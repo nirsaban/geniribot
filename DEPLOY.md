@@ -33,26 +33,40 @@ reverse-proxied to host port 4000 (see `infra/deploy-public.sh`).
 9. Smoke-test: load the site, send yourself a real WhatsApp message to a
    connected bot and confirm it responds, check `/admin` loads.
 
-## This specific deploy (Products / Cloudinary / Grow-static-links)
+## This specific deploy (one Grow link + הוראת קבע)
 
-Everything schema-related is additive and safe (see the two migrations
-`grow_payment_urls_per_plan` and `products` — already audited; the first
-backfills your old Grow link into Starter/Monthly instead of dropping it).
-Two things need manual action and aren't part of the automated steps above:
+Payment-link generation is gone. There is now a single hosted Grow page for
+the whole platform; the payer picks their plan's product and how many monthly
+payments (1–12) of a הוראת קבע they want, and the callback opens the plan for
+exactly that many months. **Two migrations here are destructive** — take the
+backup in step 1 seriously:
 
-- **Before this deploy**: create 4 static hosted payment links in Grow's own
-  dashboard (Starter/Pro × Monthly/Annual). Have the URLs ready.
-- **Right after this deploy**: go to `/admin` and paste all 4 in (the old
-  single link auto-carries into Starter/Monthly; Pro and Annual will show
-  "not configured" until you fill them in — checkout for those is down until
-  then).
-- Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
-  to the server's `.env` (`/home/debian/kesher/.env`) before `./start.sh` —
-  without them, product image upload just shows "not configured", nothing
-  else breaks.
-- The super-admin "charge saved card" feature (`/admin`, per-org) is gone —
-  it depended on the removed Make.com integration. No data lost, the button
-  is just no longer there.
+- `single_grow_link_direct_debit` drops the four per-plan link columns (the Pro
+  monthly link is carried over into the new single column, then overwritten
+  with the live GeniriBot link), drops the `BillingInterval` enum and both
+  `interval` columns (`ANNUAL` rows become `paymentsCount = 12`), drops
+  `PlanConfig.annualIls`, widens every money column to `DECIMAL(10,2)`, and
+  resets plan prices to the Grow product prices (₪49.56 / ₪89).
+- `grow_callback_log` adds a table, purely additive.
+
+Manual steps around the deploy:
+
+- **In Grow's dashboard**, point the payment link's notifyUrl at
+  `https://wabot.miltech.cloud/api/billing/grow/webhook` and its success/return
+  URL at `https://wabot.miltech.cloud/thank-you`. Without the notifyUrl nothing
+  activates — the callback is the entire integration now.
+- Keep the Grow product names **`מנוי מתקדם`** (→ בסיסי/STARTER) and
+  **`מנוי פרימיום`** (→ מקצועי/PRO). That name is how a callback is matched to
+  a plan; the charged amount is only a fallback. Renaming a product in Grow
+  without updating `PLANS[...].growProductName` breaks plan detection.
+- **Right after the deploy**: put through one real הוראת קבע (any plan, 2+
+  payments), then open `/admin` → "Callbacks אחרונים מ-Grow" and confirm which
+  key Grow used for the payments count. `growPayments` tries `paymentsNum`,
+  `paymentNum`, `payment_num`, `numOfPayments` and a few more; if the real key
+  isn't among them the grant silently falls back to **one month**. Add the key
+  to `PAYMENTS_NUM_KEYS` in `packages/billing/src/grow.ts` if needed.
+- Existing paying tenants are unaffected: their subscription rows keep their
+  plan, status and period end; annual ones simply read as 12 payments.
 
 ## Rolling back
 

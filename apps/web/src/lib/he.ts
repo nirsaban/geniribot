@@ -59,27 +59,59 @@ export const he = {
   colLeadsCount: "לידים",
   colJoined: "הצטרפו",
   setPlan: "עדכן מסלול",
+  /** Shown in the admin orgs table when a paid plan was granted by an admin, with no Grow payment behind it. */
+  planGrantedManually: "הופעל ידנית",
+  planLapsed: "המנוי פג — בפועל חינם",
   unlock: "פתח מסלול",
-  genLink: "צור קישור תשלום",
-  paymentLink: "קישור תשלום",
   copyLink: "העתק",
+  copied: "הועתק ✓",
   chargeSuccess: "חויב בהצלחה ✅",
-  checkoutGenericError: "משהו השתבש, נסה/י שוב",
   planConfigTitle: "מחירים ומגבלות למסלולים",
   planConfigDesc: "כל שינוי כאן משפיע בו-זמנית על דף הנחיתה, עמוד בחירת המסלול, ואכיפת המגבלות בפועל.",
   planConfigPriceMonthly: "מחיר חודשי (₪)",
-  planConfigPriceAnnual: "מחיר שנתי (₪)",
   planConfigConnections: "מספרי וואטסאפ",
   planConfigContacts: "לידים",
   planConfigMessages: "הודעות בחודש",
   planConfigProducts: "מוצרים/שירותים",
-  platformPaymentUrl: "קישורים לעמודי תשלום (Grow)",
-  platformPaymentUrlDesc: "קישור לעמוד תשלום סטטי שהוקם ב-Grow עבור כל מסלול ותדירות חיוב — כל קישור עם מחיר קבוע משלו. דף הנחיתה ועמוד \"בחירת מסלול\" מפנים לכאן.",
-  platformPaymentUrlStarterMonthly: "בסיסי — חודשי",
-  platformPaymentUrlStarterAnnual: "בסיסי — שנתי",
-  platformPaymentUrlProMonthly: "מקצועי — חודשי",
-  platformPaymentUrlProAnnual: "מקצועי — שנתי",
+  platformPaymentUrl: "עמוד התשלום (Grow)",
+  platformPaymentUrlDesc:
+    'קישור אחד לכל הפלטפורמה. הלקוח בוחר בעמוד של Grow את המוצר (המסלול) ואת מספר התשלומים בהוראת קבע — אנחנו לא מייצרים קישורים, אלא מקבלים callback ופותחים את המסלול לפי מה ששולם. דף הנחיתה ועמוד "בחירת מסלול" מפנים לכאן.',
+  platformPaymentUrlLabel: "קישור לעמוד התשלום",
   platformPaymentUrlPlaceholder: "https://pay.grow.link/...",
+  growProductsHint:
+    'שמות המוצרים ב-Grow חייבים להישאר "מנוי מתקדם" (בסיסי) ו"מנוי פרימיום" (מקצועי) — לפי זה ה-callback מזהה איזה מסלול נרכש. אם משנים שם או מחיר ב-Grow, יש לעדכן כאן את המחיר בהתאם.',
+
+  // the two URLs that go into Grow's dashboard
+  growUrlsTitle: "כתובות להגדרה ב-Grow",
+  growUrlsDesc:
+    "שתי הכתובות שצריך להדביק בהגדרות הלינק בממשק של Grow. הן נבנות אוטומטית לפי הדומיין שממנו נפתח העמוד הזה.",
+  growNotifyUrlLabel: "Notify URL (callback לשרת)",
+  growNotifyUrlHint:
+    "החשוב מבין השניים — זה מה שבפועל פותח את המסלול. בלעדיו אף תשלום לא יופעל, גם אם הלקוח חויב.",
+  growReturnUrlLabel: "כתובת חזרה אחרי תשלום מוצלח",
+  growReturnUrlHint: "לכאן Grow מחזיר את הלקוח בדפדפן. משם מזוהה התשלום ומשויך לחשבון.",
+
+  // unclaimed Grow payments
+  unclaimedTitle: "תשלומים ממתינים לשיוך",
+  unclaimedDesc:
+    "תשלומים שהתקבלו ב-Grow ועדיין לא שויכו לחשבון. השיוך קורה אוטומטית לפי הטלפון/אימייל שאיתו שולם, ברגע שהלקוח נרשם או מתחבר. אפשר לשייך ידנית אם הפרטים לא תואמים.",
+  unclaimedEmpty: "אין תשלומים ממתינים ✨",
+  colPaidAt: "מועד תשלום",
+  colAmount: "סכום לחודש",
+  colPayments: "תקופה",
+  colPayer: "משלם",
+  colAttachTo: "שייך לעסק",
+  selectOrg: "בחר/י עסק…",
+  attach: "שייך",
+
+  // raw Grow callbacks
+  callbacksTitle: "Callbacks אחרונים מ-Grow",
+  callbacksDesc:
+    "גוף הבקשה הגולמי כפי שהתקבל, כולל כישלונות. שימושי לוודא באיזה שדה Grow מדווח על מספר התשלומים בהוראת קבע.",
+  callbacksEmpty: "עדיין לא התקבל אף callback",
+  callbackOk: "הצליח",
+  callbackFailed: "נכשל",
+
   backToApp: "→ לאזור הלקוח",
 
   // platform Meta / Embedded Signup config
@@ -121,6 +153,7 @@ export const he = {
   noConnections: "עדיין אין חיבורים. הוסף/י אחד כדי להתחיל.",
   errGateway: "שירות הוואטסאפ לא זמין כרגע ולכן לא ניתן להתחיל התחברות. נסו/י שוב בעוד רגע.",
   errCloudFields: "צריך למלא מזהה מספר (Phone Number ID) וטוקן גישה.",
+  limitConnections: "הגעת למכסת החיבורים במסלול הנוכחי. שדרוג המסלול יפתח מספרים נוספים.",
   statusLabel: {
     PENDING: "ממתין",
     QR: "ממתין לסריקה",
@@ -292,6 +325,14 @@ export const he = {
   free: "חינם",
   choosePlan: "בחר/י מסלול",
   upgrade: "שדרג/י",
+  paidBanner: "התשלום התקבל, המסלול עודכן ✅",
+  pendingBanner: "בקשת השדרוג התקבלה. נציג יאשר את המנוי בקרוב 🙌",
+  /** The Grow page charges monthly; the whole committed period opens at once. */
+  directDebitNote: (max: number) =>
+    `התשלום מתבצע בהוראת קבע דרך Grow. בעמוד התשלום בוחרים את המסלול ואת מספר התשלומים (עד ${max} חודשים) — והמסלול נפתח מיד לכל התקופה שנרכשה.`,
+  activeUntil: (date: string, months: number) =>
+    `המסלול פעיל עד ${date} (${months === 1 ? "תשלום אחד" : `${months} תשלומים חודשיים`}).`,
+  monthsCount: (n: number) => (n === 1 ? "חודש 1" : `${n} חודשים`),
   growNotConfigured: "כדי לגבות תשלום צריך קודם לחבר את חשבון Grow שלך (ראה/י אשף ההקמה).",
   goToOnboarding: "לאשף ההקמה",
   featureLockedTitle: "היכולת הזו דורשת שדרוג מסלול",
@@ -305,10 +346,19 @@ export const he = {
   thankYouCta: "צור/י חשבון",
   thankYouHaveAccount: "כבר יש לך חשבון?",
   thankYouClaimedBody: "מצאנו את התשלום שלך והמסלול הופעל בחשבון ✅",
+  thankYouPlanOpened: (plan: string) => `מסלול ${plan} פעיל`,
+  thankYouUntil: (date: string, months: number) =>
+    `עד ${date} · ${months === 1 ? "תשלום אחד" : `${months} תשלומים חודשיים בהוראת קבע`}`,
+  thankYouStartSetup: "בוא/י נקים את הבוט",
+  thankYouGoToBilling: "לפרטי המנוי",
+  /** Grow often returns the payer here before its own callback reaches us. */
+  thankYouSearching: "מאתרים את התשלום…",
+  thankYouSearchingHint: "זה לוקח כמה שניות — אישור התשלום מ-Grow בדרך אלינו. אין צורך לרענן.",
   thankYouNotFoundBody:
     "התשלום התקבל אצל Grow, אבל עדיין לא מצאנו אותו בחשבון שלך. הזן/י את הטלפון או האימייל שאיתו שילמת:",
+  thankYouNoMatch: "לא נמצא תשלום עם הפרטים האלה. נסה/י את הטלפון או האימייל השני ששילמת איתו.",
+  thankYouRegisterHint: "חשוב: הירשמו עם אותו אימייל או טלפון ששילמתם איתו — כך נשייך את התשלום אוטומטית.",
   thankYouTryMatch: "חפש/י תשלום",
-  thankYouGoToDashboard: "לדשבורד",
   claimPaymentLabel: "טלפון או אימייל ששילמת איתו (אופציונלי)",
   claimPaymentHint: "שילמת דרך עמוד התשלום לפני שפתחת חשבון? נשייך את התשלום אוטומטית.",
 

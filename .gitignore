@@ -32,3 +32,6 @@ data/
 
 # incremental build state
 *.tsbuildinfo
+
+# local db dumps (real customer data — never commit)
+backup-*.sql

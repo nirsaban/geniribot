@@ -67,7 +67,7 @@ scale & polish.
 - Still to do (later): drag-to-connect edges, rollback to a prior version, in-editor test-run.
 
 ### Phase 7 — SaaS-ready ✅ CORE DONE (2026-07-15)
-- [x] Billing via **Grow** (Israeli payments, NOT Stripe): `@kesher/billing` plan catalog (FREE/STARTER/PRO + limits); static Grow-hosted payment page per plan × billing interval (super-admin pastes each link in `/admin`, tagged with `cField1=organizationId`); `/dashboard/billing` plans page + checkout; `/api/billing/grow/webhook` activates the plan (unauthenticated callback, trusted by matching the charged sum to a known plan price). Plan connection-limit enforced.
+- [x] Billing via **Grow** (Israeli payments, NOT Stripe): `@kesher/billing` plan catalog (FREE/STARTER/PRO + limits); **one** hosted Grow payment page for the whole platform (super-admin pastes the single link in `/admin`), selling one product per paid plan as a **הוראת קבע** of 1–12 monthly payments. We generate no links and send no custom fields — `/api/billing/grow/webhook` is the entire integration: it identifies the plan from the product name (amount as fallback), reads how many payments were committed to, and opens the plan for exactly that many months up front. A first charge parks as an `UnclaimedGrowPayment` and is matched to an account by the payer's phone/email on register/login; renewals auto-attach to the org that already claimed that payer. Plan connection-limit enforced.
 - [x] **Secure per-tenant secrets**: `Secret` model (AES-256-GCM encrypted, `@kesher/core` crypto) for things like the Cal.com webhook secret and platform-level Meta app config; a masked-hint paste UI; save/remove server actions.
 - [x] **Onboarding wizard** (`/dashboard/onboarding`): 3 steps (connect WhatsApp → availability → paste Grow secret) with instructions on how to get the secret; `onboardedAt` on Organization.
 - [x] **Flow triggers** (user request): every flow starts from an inbound message; the builder's first section defines the trigger (any / keyword). Worker routes a new conversation to the flow whose trigger matches the message (keyword > catch-all). Shown in flows list + editor.
@@ -84,7 +84,7 @@ scale & polish.
 **Phases 0–8 core all shipped. Live at https://wabot.miltech.cloud.**
 
 ### Phase 9 — Super-admin, platform billing & UI redesign ✅ DONE (2026-07-15)
-- [x] **Super admin control plane** (`User.isSuperAdmin` + session `sa` claim): `/admin` panel — all orgs table, manual plan unlock, per-org+plan Grow payment-link generation, platform-level Grow credentials. Seeded `admin@kesher.local` / `admin1234` on a "platform" org.
+- [x] **Super admin control plane** (`User.isSuperAdmin` + session `sa` claim): `/admin` panel — all orgs table, manual plan unlock, the platform's single Grow payment link, unclaimed payments (with manual attach), and the raw Grow callback log. Seeded `admin@kesher.local` / `admin1234` on a "platform" org.
 - [x] **Billing moved to platform**: Grow keys live with the super admin (`growPlatformProvider`); the Grow webhook unlocks the paying org's plan. **All Grow removed from regular users** (gone from settings + onboarding).
 - [x] **Full UI redesign** (pro): Heebo font, refined palette, `@layer` component classes (card/btn/input/badge), shared primitives (PageHeader/Card/Stat/EmptyState), sidebar app-shell; every page redesigned; dashboard overview now has KPIs + a 14-day leads chart + top-topics + recent-leads — "big boss" view.
 - [x] Onboarding reworked (WhatsApp → availability → Google) with a clear "how it works" strip.

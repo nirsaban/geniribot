@@ -7,6 +7,7 @@ import { prisma } from "@kesher/db";
 import { META_SECRETS } from "@/lib/meta";
 import { deleteSecret, setSecret } from "@/lib/secrets";
 import { getSession } from "@/lib/session";
+import { claimPaymentById, setPlanManually } from "@/lib/subscriptions";
 
 async function requireSuperAdmin(): Promise<{ org: string }> {
   const s = await getSession();
@@ -14,30 +15,47 @@ async function requireSuperAdmin(): Promise<{ org: string }> {
   return { org: s.org };
 }
 
-/** Super admin manually sets (unlocks) any org's plan. */
+/**
+ * Super admin manually sets (unlocks) any org's plan — activates a real
+ * subscription, exactly as a paid Grow checkout would, so the tenant is no
+ * longer asked to upgrade. See `setPlanManually`.
+ */
 export async function setOrgPlanAction(formData: FormData): Promise<void> {
   await requireSuperAdmin();
   const orgId = String(formData.get("orgId") ?? "");
   const plan = String(formData.get("plan") ?? "") as PlanId;
-  if (!(plan in PLANS)) return;
-  await prisma.organization.update({ where: { id: orgId }, data: { plan } });
+  if (!orgId || !(plan in PLANS)) return;
+  await setPlanManually(orgId, plan);
   revalidatePath("/admin");
+  revalidatePath("/dashboard/billing");
+  revalidatePath("/dashboard");
 }
 
-/** Save the static Grow payment page URLs — one per plan × billing interval. */
-export async function savePlatformPaymentUrlsAction(formData: FormData): Promise<void> {
+/** Save THE Grow payment page URL — one link for the whole platform. */
+export async function savePlatformPaymentUrlAction(formData: FormData): Promise<void> {
   const { org } = await requireSuperAdmin();
-  const field = (name: string) => String(formData.get(name) ?? "").trim() || null;
   await prisma.organization.update({
     where: { id: org },
-    data: {
-      growPaymentUrlStarterMonthly: field("starter_monthly"),
-      growPaymentUrlStarterAnnual: field("starter_annual"),
-      growPaymentUrlProMonthly: field("pro_monthly"),
-      growPaymentUrlProAnnual: field("pro_annual"),
-    },
+    data: { growPaymentUrl: String(formData.get("payment_url") ?? "").trim() || null },
   });
   revalidatePath("/admin");
+  revalidatePath("/dashboard/billing");
+  revalidatePath("/");
+}
+
+/**
+ * Attach a Grow payment that arrived with no matching account to an org by
+ * hand — the fallback for when the payer used a phone/email on Grow's page
+ * that matches nothing we have, so the automatic claim never fired.
+ */
+export async function claimPaymentForOrgAction(formData: FormData): Promise<void> {
+  await requireSuperAdmin();
+  const orgId = String(formData.get("orgId") ?? "");
+  const paymentId = String(formData.get("paymentId") ?? "");
+  if (!orgId || !paymentId) return;
+  await claimPaymentById(orgId, paymentId);
+  revalidatePath("/admin");
+  revalidatePath("/dashboard/billing");
 }
 
 /** Save price + limits for one plan — overrides the hardcoded defaults everywhere they're read. */
@@ -50,9 +68,13 @@ export async function savePlanConfigAction(formData: FormData): Promise<void> {
     const v = Number(formData.get(name));
     return Number.isFinite(v) && v >= 0 ? Math.round(v) : fallback;
   };
+  // Price alone may carry agorot — the Grow products aren't whole shekels.
+  const rawPrice = Number(formData.get("priceIls"));
+  const priceIls =
+    Number.isFinite(rawPrice) && rawPrice >= 0 ? Math.round(rawPrice * 100) / 100 : PLANS[id].priceIls;
+
   const data = {
-    priceIls: num("priceIls", PLANS[id].priceIls),
-    annualIls: num("annualIls", PLANS[id].annualIls),
+    priceIls,
     connections: num("connections", PLANS[id].limits.connections),
     contacts: num("contacts", PLANS[id].limits.contacts),
     monthlyMessages: num("monthlyMessages", PLANS[id].limits.monthlyMessages),
