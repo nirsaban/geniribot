@@ -18,6 +18,23 @@ async function ownFlow(org: string, id: string) {
   return f;
 }
 
+/**
+ * Resolve a submitted connection id to one this org actually owns.
+ *
+ * Empty means "all numbers" and is stored as null. A value the org does not own
+ * is dropped to null rather than trusted: this comes off a form, and binding a
+ * scenario to another tenant's number would leak the flow into their routing.
+ */
+async function ownedConnectionId(org: string, raw: FormDataEntryValue | null): Promise<string | null> {
+  const id = String(raw ?? "").trim();
+  if (!id) return null;
+  const conn = await prisma.whatsAppConnection.findFirst({
+    where: { id, organizationId: org },
+    select: { id: true },
+  });
+  return conn?.id ?? null;
+}
+
 /** Persist an edited flow definition (validated) and bump its version. */
 export async function saveFlowAction(
   id: string,
@@ -41,10 +58,22 @@ export async function saveFlowAction(
     return { error: "start node missing" };
   }
 
-  // Auto-activate on save if the org has no active flow yet — so a freshly built
-  // bot actually goes live instead of silently sitting inactive.
+  // Auto-activate on save if nothing else already answers on this scenario's
+  // number — so a freshly built bot actually goes live instead of silently
+  // sitting inactive.
+  //
+  // Scoped to the number rather than the whole org, because org-wide was wrong
+  // the moment a second number existed: a business that already had a live
+  // scenario built a second one for their new line, and it stayed switched off
+  // with no indication why. For a flow bound to a number, "already covered"
+  // means covered *on that number* — by its own scripts or by an org-wide one.
   const activeElsewhere = await prisma.flow.count({
-    where: { organizationId: org, isActive: true, id: { not: flow.id } },
+    where: {
+      organizationId: org,
+      isActive: true,
+      id: { not: flow.id },
+      ...(flow.connectionId ? { OR: [{ connectionId: flow.connectionId }, { connectionId: null }] } : {}),
+    },
   });
   await prisma.flow.update({
     where: { id: flow.id },
@@ -153,11 +182,14 @@ export async function createFlowAction(formData: FormData): Promise<void> {
     if (!product) redirect("/dashboard/flows");
   }
 
+  const connectionId = await ownedConnectionId(org, formData.get("connectionId"));
+
   const flow = await prisma.flow.create({
     data: {
       organizationId: org,
       name: product ? `${tpl.name} — ${product.name}` : tpl.name,
       productId,
+      connectionId,
       isActive: false,
       definition: tpl.definition as Prisma.InputJsonValue,
       fieldSchema: deriveFieldSchema(
@@ -183,4 +215,21 @@ export async function setFlowProductAction(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/flows");
   revalidatePath(`/dashboard/flows/${id}/edit`);
   revalidatePath("/dashboard/products");
+}
+
+/**
+ * Bind this scenario to one WhatsApp number, or to all of them (empty value).
+ * Only affects which number *starts* a run — conversations already in progress
+ * keep running their flow, since rebinding mid-conversation would strand a lead
+ * halfway through the script.
+ */
+export async function setFlowConnectionAction(formData: FormData): Promise<void> {
+  const org = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const flow = await ownFlow(org, id);
+  const connectionId = await ownedConnectionId(org, formData.get("connectionId"));
+  await prisma.flow.update({ where: { id: flow.id }, data: { connectionId } });
+  revalidatePath("/dashboard/flows");
+  revalidatePath(`/dashboard/flows/${id}/edit`);
+  revalidatePath("/dashboard/connections");
 }

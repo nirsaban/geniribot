@@ -438,6 +438,13 @@ export const he = {
   flowGeneralOption: "כללי (ללא מוצר)",
   flowProductLabel: "מוצר משויך",
   flowProductNone: "— ללא —",
+  flowConnectionLabel: "מספר משויך",
+  flowConnectionAll: "כל המספרים",
+  flowConnectionAllBadge: "פועל בכל המספרים",
+  flowConnectionHint:
+    "תסריט שמשויך למספר מסוים ירוץ רק בו, ויקבל עדיפות על תסריט כללי. תסריט ללא שיוך ירוץ בכל המספרים.",
+  flowsOnConnection: "תסריטים במספר הזה",
+  flowsOnConnectionNone: "אין תסריט ייעודי — המספר מריץ את התסריטים הכלליים",
   saveAssignment: "שמירה",
   activate: "הפעל",
   deactivate: "כבה",

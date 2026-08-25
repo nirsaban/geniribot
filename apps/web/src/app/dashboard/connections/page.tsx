@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
 import { BotStatus, getBotReadiness } from "@/components/BotStatus";
@@ -29,6 +30,22 @@ export default async function ConnectionsPage({
   const connections = await prisma.whatsAppConnection.findMany({
     where: { organizationId: session.org },
     orderBy: { createdAt: "desc" },
+    include: {
+      flows: {
+        where: { isActive: true },
+        select: { id: true, name: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  // Scripts with no number of their own run on every number, so they belong on
+  // each card — otherwise a number bound to nothing reads as a number that does
+  // nothing, when in fact it is the one running the general scripts.
+  const orgWideFlows = await prisma.flow.findMany({
+    where: { organizationId: session.org, isActive: true, connectionId: null },
+    select: { id: true, name: true },
+    orderBy: { createdAt: "asc" },
   });
 
   const origin = process.env.PUBLIC_BASE_URL ?? "https://wabot.miltech.cloud";
@@ -142,6 +159,37 @@ export default async function ConnectionsPage({
                       </form>
                     )}
                   </div>
+                </div>
+
+                <div className="mt-3 border-t border-gray-100 pt-3 text-xs">
+                  <div className="text-gray-500">🤖 {he.flowsOnConnection}</div>
+                  {c.flows.length === 0 && orgWideFlows.length === 0 ? (
+                    <div className="mt-1 text-gray-400">{he.flowsOnConnectionNone}</div>
+                  ) : (
+                    <ul className="mt-1 flex flex-wrap gap-1.5">
+                      {c.flows.map((f) => (
+                        <li key={f.id}>
+                          <Link
+                            href={`/dashboard/flows/${f.id}/edit`}
+                            className="rounded bg-brand/10 px-1.5 py-0.5 text-brand-dark hover:bg-brand/20"
+                          >
+                            {f.name}
+                          </Link>
+                        </li>
+                      ))}
+                      {orgWideFlows.map((f) => (
+                        <li key={f.id}>
+                          <Link
+                            href={`/dashboard/flows/${f.id}/edit`}
+                            className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-500 hover:bg-gray-200"
+                            title={he.flowConnectionAllBadge}
+                          >
+                            {f.name} · {he.flowConnectionAll}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 {pairing && (

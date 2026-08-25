@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@kesher/db";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { connectionName, orgConnections } from "@/lib/connections";
 import { he } from "@/lib/he";
 import { getSession } from "@/lib/session";
 import { createFlowAction, toggleFlowActiveAction } from "./actions";
@@ -27,18 +28,26 @@ export default async function FlowsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [flows, products] = await Promise.all([
+  const [flows, products, connections] = await Promise.all([
     prisma.flow.findMany({
       where: { organizationId: session.org },
       orderBy: { createdAt: "desc" },
-      include: { product: { select: { name: true } } },
+      include: {
+        product: { select: { name: true } },
+        connection: { select: { id: true, label: true, phoneNumber: true } },
+      },
     }),
     prisma.product.findMany({
       where: { organizationId: session.org },
       select: { id: true, name: true },
       orderBy: { createdAt: "desc" },
     }),
+    orgConnections(session.org),
   ]);
+
+  // The number badge only earns its space once there is more than one number to
+  // tell apart — a single-number org would just see the same label on every row.
+  const showNumbers = connections.length > 1;
 
   return (
     <>
@@ -46,7 +55,7 @@ export default async function FlowsPage() {
         title={he.flowsTitle}
         subtitle={he.flowsSubtitle}
         action={
-          <form action={createFlowAction} className="flex items-center gap-2">
+          <form action={createFlowAction} className="flex flex-wrap items-center gap-2">
             <input type="hidden" name="template" value="lead" />
             {products.length > 0 && (
               <select name="productId" className="input btn-sm" defaultValue="">
@@ -54,6 +63,16 @@ export default async function FlowsPage() {
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {showNumbers && (
+              <select name="connectionId" className="input btn-sm" defaultValue="">
+                <option value="">{he.flowConnectionAll}</option>
+                {connections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {connectionName(c)}
                   </option>
                 ))}
               </select>
@@ -76,6 +95,18 @@ export default async function FlowsPage() {
                 </div>
                 <div className="mt-1 text-xs text-amber-700">⚡ {triggerLabel(f.definition)}</div>
                 {f.product && <div className="mt-1 text-xs text-brand">🛍️ {f.product.name}</div>}
+                {showNumbers && (
+                  <div className="mt-1 text-xs text-slate-500">
+                    📱{" "}
+                    {f.connection ? (
+                      <span className="font-medium text-ink" dir="auto">
+                        {connectionName(f.connection)}
+                      </span>
+                    ) : (
+                      he.flowConnectionAllBadge
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className={f.isActive ? "badge-green" : "badge-gray"}>

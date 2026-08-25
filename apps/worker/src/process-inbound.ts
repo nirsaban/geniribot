@@ -59,26 +59,33 @@ const log = childLogger("worker:inbound");
  * appointment → resume) is handled here because it needs DB I/O.
  */
 /**
- * Is this sender one of our own WhatsApp connections?
+ * Is this sender another *tenant's* bot?
  *
  * Two bots on this platform must never hold a conversation. It happens easily:
- * a business tests their bot from a phone that is itself paired as a connection
- * (their own, or another tenant's), and each bot's reply is the other's inbound.
- * Neither retries nor rate limits stop that cleanly — the messages parse fine,
- * so the flow advances, completes, restarts, and runs forever at whatever pace
- * the round trip allows.
+ * a business tests their bot from a phone that is itself paired as a connection,
+ * and each bot's reply is the other's inbound. Neither retries nor rate limits
+ * stop that cleanly — the messages parse fine, so the flow advances, completes,
+ * restarts, and runs forever at whatever pace the round trip allows.
  *
- * Checked platform-wide rather than per-organization, because the two ends are
- * usually in *different* organizations — that is exactly what makes it look
- * like ordinary lead traffic.
+ * The guard is deliberately limited to senders in a *different* organization.
+ * Cross-tenant is the case that looks like ordinary lead traffic and that nobody
+ * asked for. Within one organization the opposite is true: a business that pairs
+ * a sales line and a support line fully expects to message one from the other,
+ * and blocking that broke the first thing anyone does after adding a second
+ * number — send it a test message from the number they already had. Those runs
+ * are still bounded by the per-contact reply-rate ceiling below, which pauses
+ * the conversation for a human instead of letting it spin.
  *
  * Only CONNECTED connections count. A number that merely *has* a connection row
  * — one stuck at QR, or logged out — is not a bot, it is a person holding a
- * phone; silencing them is what this guard did to the very people most likely
- * to test their own bot. A real loop needs both ends live, so requiring
- * CONNECTED loses no protection.
+ * phone. A real loop needs both ends live, so requiring CONNECTED loses no
+ * protection.
  */
-async function isPlatformNumber(from: string, fromJid?: string): Promise<boolean> {
+async function isForeignPlatformNumber(
+  organizationId: string,
+  from: string,
+  fromJid?: string,
+): Promise<boolean> {
   const candidates = [from];
   const jidUser = fromJid?.split("@")[0];
   if (jidUser && jidUser !== from) candidates.push(jidUser);
@@ -86,6 +93,7 @@ async function isPlatformNumber(from: string, fromJid?: string): Promise<boolean
   const hit = await prisma.whatsAppConnection.findFirst({
     where: {
       status: "CONNECTED",
+      organizationId: { not: organizationId },
       OR: [
         { phoneNumber: { in: candidates } },
         { displayPhoneNumber: { in: candidates } },
@@ -96,7 +104,7 @@ async function isPlatformNumber(from: string, fromJid?: string): Promise<boolean
   if (hit) {
     log.warn(
       { from, fromJid, connectionId: hit.id, ownerOrg: hit.organizationId },
-      "inbound from one of our own connections — not replying (bot-to-bot loop guard)",
+      "inbound from another tenant's connection — not replying (bot-to-bot loop guard)",
     );
   }
   return Boolean(hit);
@@ -105,9 +113,9 @@ async function isPlatformNumber(from: string, fromJid?: string): Promise<boolean
 export async function processInbound(job: InboundJob): Promise<void> {
   const { organizationId, connectionId, from, fromJid, senderPn, text } = job;
 
-  // Before anything else, and before any message is stored: a bot talking to a
+  // Before anything else, and before any message is stored: another tenant's
   // bot is never a lead.
-  if (await isPlatformNumber(from, fromJid)) return;
+  if (await isForeignPlatformNumber(organizationId, from, fromJid)) return;
 
   // When a LID chat resolved to a real number, `from` is that number and the
   // LID is what any earlier contact was filed under.
@@ -122,7 +130,7 @@ export async function processInbound(job: InboundJob): Promise<void> {
   // A keyword trigger acts like a command: it (re)starts its flow even if
   // another conversation is in progress. Otherwise an active conversation
   // continues its flow, and a brand-new one is matched by trigger.
-  const keywordFlow = await selectKeywordFlow(organizationId, text);
+  const keywordFlow = await selectKeywordFlow(organizationId, connectionId, text);
   let flowRow: Flow | null = null;
 
   // A keyword restarts its flow even when that same flow is the one already
@@ -142,10 +150,22 @@ export async function processInbound(job: InboundJob): Promise<void> {
     flowRow = await selectFlowByTrigger(organizationId, connectionId, text);
   }
   if (!flowRow) {
-    const activeCount = await prisma.flow.count({ where: { organizationId, isActive: true } });
+    // Counted two ways, because with per-number scoping "the org has no active
+    // flow" and "this number has none" are different problems with different
+    // fixes, and the log is the only place anyone diagnoses either.
+    const [activeCount, onThisNumber] = await Promise.all([
+      prisma.flow.count({ where: { organizationId, isActive: true } }),
+      prisma.flow.count({
+        where: { organizationId, isActive: true, OR: [{ connectionId }, { connectionId: null }] },
+      }),
+    ]);
     log.warn(
-      { organizationId, connectionId, activeFlows: activeCount },
-      activeCount === 0 ? "no ACTIVE flow — activate a flow in the dashboard" : "no matching flow; ignoring message",
+      { organizationId, connectionId, activeFlows: activeCount, flowsOnThisNumber: onThisNumber },
+      activeCount === 0
+        ? "no ACTIVE flow — activate a flow in the dashboard"
+        : onThisNumber === 0
+          ? "no ACTIVE flow bound to this number — bind one, or set a flow to run on all numbers"
+          : "no matching flow; ignoring message",
     );
     return;
   }
@@ -437,41 +457,59 @@ async function resolveContact(
   }
 }
 
-/** An ACTIVE flow whose keyword trigger matches this message (most specific). */
-async function selectKeywordFlow(organizationId: string, text: string): Promise<Flow | null> {
+/**
+ * The active flows this number is allowed to run, most specific first.
+ *
+ * A flow bound to this connection is the business saying "this script is the one
+ * for this number", so it outranks an org-wide flow (`connectionId: null`) no
+ * matter what either was triggered by. Flows bound to a *different* number are
+ * not in the list at all — that is the whole point of binding them.
+ *
+ * Ordering within each tier stays createdAt-ascending, so an org running a
+ * single number sees exactly the behaviour it had before flows could be bound.
+ */
+async function candidateFlows(organizationId: string, connectionId: string) {
   const flows = await prisma.flow.findMany({
-    where: { organizationId, isActive: true },
+    where: {
+      organizationId,
+      isActive: true,
+      OR: [{ connectionId }, { connectionId: null }],
+    },
     orderBy: { createdAt: "asc" },
   });
-  for (const f of flows) {
-    const parsed = FlowDefinition.safeParse(f.definition);
-    if (!parsed.success) continue;
-    const t = parsed.data.trigger;
-    if (triggerSpecificity(t) === 1 && matchesTrigger(t, text)) return f;
-  }
-  return null;
+  return flows
+    .map((f) => ({ f, def: FlowDefinition.safeParse(f.definition) }))
+    .filter((p) => p.def.success)
+    .map((p) => ({ f: p.f, trigger: p.def.data!.trigger }))
+    .sort((a, b) => Number(Boolean(b.f.connectionId)) - Number(Boolean(a.f.connectionId)));
+}
+
+/** An ACTIVE flow on this number whose keyword trigger matches (most specific). */
+async function selectKeywordFlow(
+  organizationId: string,
+  connectionId: string,
+  text: string,
+): Promise<Flow | null> {
+  const candidates = await candidateFlows(organizationId, connectionId);
+  const kw = candidates.find(
+    (p) => triggerSpecificity(p.trigger) === 1 && matchesTrigger(p.trigger, text),
+  );
+  return kw?.f ?? null;
 }
 
 /**
  * Choose which active flow an inbound message starts, by matching triggers:
  * a keyword trigger that matches wins; otherwise the connection's default flow;
- * otherwise a catch-all ("any") flow. Returns null if the org has no flows.
+ * otherwise a catch-all ("any") flow. Only flows this number may run are
+ * considered. Returns null if the number has no flow it can run.
  */
 async function selectFlowByTrigger(
   organizationId: string,
   connectionId: string,
   text: string,
 ): Promise<Flow | null> {
-  const flows = await prisma.flow.findMany({
-    where: { organizationId, isActive: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (flows.length === 0) return null;
-
-  const parsed = flows
-    .map((f) => ({ f, def: FlowDefinition.safeParse(f.definition) }))
-    .filter((p) => p.def.success)
-    .map((p) => ({ f: p.f, trigger: p.def.data!.trigger }));
+  const parsed = await candidateFlows(organizationId, connectionId);
+  if (parsed.length === 0) return null;
 
   // 1) keyword trigger that matches the message (most specific)
   const kw = parsed.find(

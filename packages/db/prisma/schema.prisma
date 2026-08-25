@@ -340,6 +340,8 @@ model WhatsAppConnection {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /** Scenarios written specifically for this number (Flow.connectionId). */
+  flows        Flow[]
 
   @@index([organizationId])
 }
@@ -372,14 +374,29 @@ model Flow {
   fieldSchema    Json?
   /** The product/service this scenario sells, if any — null = a general org-wide flow. */
   productId      String?
+  /**
+   * The WhatsApp number this scenario belongs to. Null = it runs on every one of
+   * the org's numbers, which is what every flow written before multi-number was
+   * a real setup means.
+   *
+   * Without this a business running two numbers has no way to say "this script
+   * is the one for the sales line": flow selection matched every active flow in
+   * the organization, so a keyword written for one number answered on all of
+   * them. A flow bound to a number is preferred over an org-wide one on that
+   * number, and is invisible to the others.
+   */
+  connectionId   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /** Unbinding rather than deleting: losing a number must not delete its scripts. */
+  connection   WhatsAppConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([productId])
+  @@index([connectionId])
 }
 
 // ---------- Products / services ----------
