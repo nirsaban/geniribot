@@ -69,6 +69,9 @@ importers:
       '@kesher/flow-engine':
         specifier: workspace:*
         version: link:../../packages/flow-engine
+      '@kesher/scheduling':
+        specifier: workspace:*
+        version: link:../../packages/scheduling
       '@kesher/whatsapp':
         specifier: workspace:*
         version: link:../../packages/whatsapp

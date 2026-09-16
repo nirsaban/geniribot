@@ -17,6 +17,7 @@
     "@kesher/core": "workspace:*",
     "@kesher/db": "workspace:*",
     "@kesher/flow-engine": "workspace:*",
+    "@kesher/scheduling": "workspace:*",
     "@kesher/whatsapp": "workspace:*",
     "@xyflow/react": "^12",
     "bullmq": "^5.34.6",

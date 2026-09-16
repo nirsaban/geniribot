@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@kesher/db";
-import { attendeeName, attendeePhone, type CalcomPayload } from "@/lib/calcom";
+import { attendeeName, attendeePhone, bookerContactId, type CalcomPayload } from "@/lib/calcom";
 import { OUTBOUND_JOB, outboundQueue, type OutboundJob } from "@/lib/outboundQueue";
 import { getSecret } from "@/lib/secrets";
 
@@ -36,27 +36,83 @@ function verifySignature(raw: string, signature: string | null, secret: string):
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * How long after the bot sends the booking link a booking can still be credited
+ * to whoever received it. Long enough for "I'll look at my calendar tonight",
+ * short enough that it cannot reach yesterday's leads.
+ */
+const LINK_WINDOW_MS = 6 * 3600 * 1000;
+
+/**
+ * The lead the bot most recently sent this org's Cal.com link to, plus whether
+ * they were the only one in the window — an unidentified booking can be
+ * confirmed back to a sole recipient, but not to one of several.
+ */
+async function lastLinkRecipients(organizationId: string, calcomLink: string | null) {
+  if (!calcomLink) return null;
+  const sent = await prisma.message.findMany({
+    where: {
+      direction: "OUT",
+      // The link goes out prefilled, so the stored body carries query params
+      // after the tenant's base link — match on the base.
+      body: { contains: calcomLink },
+      createdAt: { gte: new Date(Date.now() - LINK_WINDOW_MS) },
+      conversation: { organizationId },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { conversation: { select: { contactId: true } } },
+  });
+  if (sent.length === 0) return null;
+
+  const ids = [...new Set(sent.map((m) => m.conversation.contactId))];
+  const contact = await prisma.contact.findUnique({ where: { id: ids[0] } });
+  if (!contact) return null;
+  return { contact, sole: ids.length === 1 };
+}
+
 /** How confident we are that `contact` is the person who booked. */
-type MatchedBy = "phone" | "created_from_booking" | "name" | "recent_activity";
+type MatchedBy =
+  | "link_metadata"
+  | "phone"
+  | "created_from_booking"
+  | "name"
+  | "booking_link_sent"
+  | "recent_activity";
 
 /**
  * Resolve the booking to the lead who actually booked it.
  *
  * Strongest first:
+ *  0. the contact id the bot put on the booking link and Cal.com handed back in
+ *     `payload.metadata` — proof, not inference,
  *  1. the attendee's own phone vs. a lead's number — the only identifier both
  *     systems share, and the only one we can message,
  *  2. that phone with no lead behind it: plenty of people book straight off the
  *     Cal.com link without ever messaging the bot, so the booking *is* the
  *     lead — create it rather than pinning the meeting onto a stranger,
  *  3. exact attendee name,
- *  4. the lead most recently active on WhatsApp.
+ *  4. the lead the bot just sent this booking link to — the booking form asks
+ *     for a name and an email, so a lead who retypes their name (a contact
+ *     saved as "ניר" booking as "Nir Saban") is otherwise unidentifiable even
+ *     though the link reached exactly one person minutes earlier,
+ *  5. the lead most recently active on WhatsApp.
  *
  * `confirmable` marks whether we know the booker well enough to message them.
- * Case 4 is a guess: it fires when the booking carries no phone and no known
- * name, so the "most recent chatter" is simply whoever happened to be talking
- * to the bot — messaging them would confirm a meeting they never booked.
+ * Case 5 is a guess: it fires when the booking carries no phone, no known name
+ * and no traceable link, so the "most recent chatter" is simply whoever happened
+ * to be talking to the bot — messaging them would confirm a meeting they never
+ * booked. Case 4 is only trusted while the link went to a single lead in the
+ * window; past that we cannot tell which of them walked through it.
  */
-async function resolveBooker(organizationId: string, p: CalcomPayload) {
+async function resolveBooker(organizationId: string, p: CalcomPayload, calcomLink: string | null) {
+  const viaLink = bookerContactId(p);
+  if (viaLink) {
+    // Scoped to the org: the id arrives from the open internet, signed only as
+    // part of the booking body, and must never reach another tenant's lead.
+    const tagged = await prisma.contact.findFirst({ where: { id: viaLink, organizationId } });
+    if (tagged) return { contact: tagged, matchedBy: "link_metadata" as MatchedBy, confirmable: true };
+  }
+
   const phone = attendeePhone(p);
   const name = attendeeName(p);
 
@@ -85,6 +141,15 @@ async function resolveBooker(organizationId: string, p: CalcomPayload) {
       orderBy: { lastContactedAt: "desc" },
     });
     if (byName) return { contact: byName, matchedBy: "name" as MatchedBy, confirmable: true };
+  }
+
+  const link = await lastLinkRecipients(organizationId, calcomLink);
+  if (link) {
+    return {
+      contact: link.contact,
+      matchedBy: "booking_link_sent" as MatchedBy,
+      confirmable: link.sole,
+    };
   }
 
   const RECENT_MS = 3 * 3600 * 1000;
@@ -176,7 +241,10 @@ async function sendBookingSummary(
 export async function POST(req: Request, { params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = await params;
 
-  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true } });
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { id: true, calcomLink: true },
+  });
   if (!org) return NextResponse.json({ error: "unknown_org" }, { status: 404 });
 
   const secret = await getSecret(orgId, SECRET_NAME);
@@ -233,7 +301,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ orgId: 
     return NextResponse.json({ error: "missing_times" }, { status: 400 });
   }
 
-  const match = await resolveBooker(orgId, p);
+  const match = await resolveBooker(orgId, p, org.calcomLink);
   if (!match) return NextResponse.json({ ok: true, note: "no_matching_lead" });
   const { contact, matchedBy, confirmable } = match;
 
@@ -302,8 +370,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ orgId: 
     await sendBookingSummary(orgId, contact, new Date(p.startTime), p.title ?? null);
   } else {
     console.warn(
-      `calcom webhook: booking ${p.uid} has no attendee phone and no known name — ` +
-        `recorded against contact ${contact.id} but no confirmation sent`,
+      `calcom webhook: booking ${p.uid} could not be tied to a lead (matchedBy=${matchedBy}) — ` +
+        `recorded against contact ${contact.id} but no confirmation sent. ` +
+        `attendeeName=${attendeeName(p)} responses=${Object.keys(p.responses ?? {}).join(",")}`,
     );
   }
 

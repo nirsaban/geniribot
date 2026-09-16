@@ -8,6 +8,8 @@
  * See docs/ROADMAP.md.
  */
 
+export { bookingLink, CONTACT_METADATA_KEY, type BookingLinkLead } from "./booking-link.js";
+
 export interface AvailabilityRule {
   /** 0 = Sunday … 6 = Saturday (UTC weekday for Phase 0). */
   weekday: number;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attendeePhone } from "@/lib/calcom";
+import { attendeePhone, bookerContactId } from "@/lib/calcom";
 
 /**
  * Regression cover for the confirmation-to-the-wrong-person bug: an event type
@@ -40,5 +40,31 @@ describe("attendeePhone", () => {
 
   it("returns null when the booking carries no attendee number at all", () => {
     expect(attendeePhone({ attendees: [{ name: "אבישי שלזינגר", email: "a@b.com" }] })).toBeNull();
+  });
+});
+
+/**
+ * The booking link the bot sends carries our contact id in `metadata[...]`;
+ * Cal.com hands it back untouched. Without it a lead who retypes their name on
+ * an event type with no phone question is unidentifiable, and the meeting is
+ * recorded with nobody told it was set.
+ */
+describe("bookerContactId", () => {
+  it("reads the id back off the booking metadata", () => {
+    expect(bookerContactId({ metadata: { kesherContactId: "cmu3voboh000jl6jn" } })).toBe("cmu3voboh000jl6jn");
+  });
+
+  it("ignores Cal.com's own metadata", () => {
+    expect(bookerContactId({ metadata: { videoCallUrl: "https://app.cal.com/video/x" } })).toBeNull();
+  });
+
+  it("is null for a booking made straight off the public link", () => {
+    expect(bookerContactId({})).toBeNull();
+    expect(bookerContactId({ metadata: {} })).toBeNull();
+  });
+
+  it("does not take a non-string or blank id", () => {
+    expect(bookerContactId({ metadata: { kesherContactId: 42 } })).toBeNull();
+    expect(bookerContactId({ metadata: { kesherContactId: "  " } })).toBeNull();
   });
 });

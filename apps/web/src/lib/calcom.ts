@@ -1,3 +1,4 @@
+import { CONTACT_METADATA_KEY } from "@kesher/scheduling";
 import { normalizePhone } from "@/lib/audience";
 
 /**
@@ -20,6 +21,8 @@ export interface CalcomPayload {
   attendees?: CalcomAttendee[];
   responses?: Record<string, unknown>;
   location?: string;
+  /** Whatever we put in `metadata[...]` on the booking link, handed back verbatim. */
+  metadata?: Record<string, unknown>;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -69,4 +72,17 @@ export function attendeePhone(p: CalcomPayload): string | null {
 
 export function attendeeName(p: CalcomPayload): string | null {
   return p.attendees?.[0]?.name?.trim() || null;
+}
+
+/**
+ * The contact the booking link was issued to, if the booking came through one.
+ *
+ * The bot sends every Cal.com link with `metadata[kesherContactId]` on it (see
+ * `bookingLink`), and Cal.com returns the metadata untouched on the webhook.
+ * It is the only identifier that survives the lead retyping their name and an
+ * event type with no phone question — everything else is inference.
+ */
+export function bookerContactId(p: CalcomPayload): string | null {
+  const v = p.metadata?.[CONTACT_METADATA_KEY];
+  return typeof v === "string" && v.trim() ? v.trim() : null;
 }

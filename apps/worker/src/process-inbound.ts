@@ -15,6 +15,7 @@ import type { Flow } from "@kesher/db";
 import { addTag, assignOwner, notifyAgent } from "./agent-routing.js";
 import { orgCalendar } from "./calendar.js";
 import { formatSlot, offerSlots, slotMenu } from "./booking.js";
+import { bookingLink } from "@kesher/scheduling";
 import {
   delaysQueue,
   OUTBOUND_JOB,
@@ -545,6 +546,18 @@ interface Ctx {
   contactName: string | null;
 }
 
+/**
+ * The lead's real phone number, or null when we only have an opaque id.
+ *
+ * A "@lid" sender hides their number: `to` then holds WhatsApp's opaque id,
+ * which looks like a long phone number but dials nothing. Prefilling it into a
+ * booking form would hand Cal.com a fake number to SMS.
+ */
+function leadPhone(ctx: Ctx): string | null {
+  if (ctx.toJid?.endsWith("@lid") && ctx.toJid.split("@")[0] === ctx.to) return null;
+  return ctx.to;
+}
+
 /** Apply engine actions (incl. the booking offer) and persist final state. */
 async function applyAndPersist(flow: FlowDefinition, result: StepResult, ctx: Ctx): Promise<void> {
   const savedFields: Record<string, unknown> = {};
@@ -563,7 +576,16 @@ async function applyAndPersist(flow: FlowDefinition, result: StepResult, ctx: Ct
         select: { calcomLink: true },
       });
       if (org?.calcomLink) {
-        await sendOut(`אשמח שנתאם שיחה טלפונית! קבע/י מועד שנוח לך כאן 👇\n${org.calcomLink}`, ctx);
+        // Prefill the booking form with the lead's own details, so the booking
+        // comes back to the Cal.com webhook identifiable (see `bookingLink`).
+        // The name may have been captured moments ago in this same run, so read
+        // the pending field before the stored one.
+        const link = bookingLink(org.calcomLink, {
+          contactId: ctx.contactId,
+          name: (savedFields.name as string | undefined) ?? ctx.contactName,
+          phone: leadPhone(ctx),
+        });
+        await sendOut(`אשמח שנתאם שיחה טלפונית! קבע/י מועד שנוח לך כאן 👇\n${link}`, ctx);
         const resumed = resumeBooking(flow, finalState);
         for (const a of resumed.actions) if (a.kind === "send_message") await sendOut(a.text, ctx);
         finalState = resumed.state;
