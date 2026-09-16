@@ -45,6 +45,13 @@ describe("bookingLink", () => {
     expect(url.searchParams.get("month")).toBe("2026-09");
   });
 
+  it("keeps a Hebrew Cal.com handle readable in the chat", () => {
+    const link = bookingLink("https://cal.com/ניר-סבאן-zgtxlf/20min", { name: "ניר" });
+    expect(link).toContain("https://cal.com/ניר-סבאן-zgtxlf/20min?");
+    // Still the same URL once a client encodes it.
+    expect(new URL(link).pathname).toBe(new URL("https://cal.com/ניר-סבאן-zgtxlf/20min").pathname);
+  });
+
   it("passes a non-URL through untouched rather than breaking the message", () => {
     expect(bookingLink("cal.com/eden", { name: "ניר" })).toBe("cal.com/eden");
   });

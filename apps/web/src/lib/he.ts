@@ -313,6 +313,11 @@ export const he = {
   calcomWebhookSecretLabel: "Secret (אותו ערך גם ב-Cal.com וגם כאן)",
   calcomWebhookSecretPlaceholder: "מחרוזת סודית שתמציאו",
   calcomWebhookSaved: "הגדרות ה-Webhook נשמרו ✅",
+  calcomWebhookSecretSet: "✅ Secret מוגדר — Cal.com מעדכן את המערכת אוטומטית",
+  calcomWebhookSecretMissing:
+    "⚠️ אין Secret מוגדר — Cal.com שולח עדכונים אבל המערכת דוחה אותם, ופגישות שנקבעות לא ייכנסו ולא יישלח אישור ללקוח",
+  calcomWebhookSecretKeepHint: "השאירו ריק כדי לא לשנות את ה-Secret הקיים",
+  calcomWebhookSecretClear: "מחיקת ה-Secret",
   calcomWebhookEvents: "אירועים לסימון ב-Cal.com: Booking Created, Booking Cancelled, Booking Rescheduled",
 
   // billing / plans

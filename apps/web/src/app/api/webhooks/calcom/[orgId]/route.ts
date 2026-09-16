@@ -247,11 +247,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ orgId: 
   });
   if (!org) return NextResponse.json({ error: "unknown_org" }, { status: 404 });
 
+  // Both rejections below are logged: a rejected delivery looks exactly like no
+  // delivery from inside the product — bookings simply stop arriving — and the
+  // silence cost a day of hunting the wrong bug.
   const secret = await getSecret(orgId, SECRET_NAME);
-  if (!secret) return NextResponse.json({ error: "webhook_not_configured" }, { status: 401 });
+  if (!secret) {
+    console.warn(
+      `calcom webhook: org ${orgId} has no ${SECRET_NAME} — delivery rejected. ` +
+        `Set it in Settings → Cal.com (same value as the Cal.com webhook's secret).`,
+    );
+    return NextResponse.json({ error: "webhook_not_configured" }, { status: 401 });
+  }
 
   const raw = await req.text();
   if (!verifySignature(raw, req.headers.get("x-cal-signature-256"), secret)) {
+    console.warn(
+      `calcom webhook: org ${orgId} signature mismatch — delivery rejected. ` +
+        `The secret here and the one on the Cal.com webhook differ` +
+        `${req.headers.get("x-cal-signature-256") ? "" : " (no signature header sent at all)"}.`,
+    );
     return NextResponse.json({ error: "bad_signature" }, { status: 401 });
   }
 

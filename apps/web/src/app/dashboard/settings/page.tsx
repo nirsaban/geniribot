@@ -127,6 +127,12 @@ export default async function SettingsPage({
             </code>
             <p className="mt-1 text-xs text-slate-400">{he.calcomWebhookEvents}</p>
           </div>
+          {/* Without the secret every Cal.com delivery is rejected, and the only
+              symptom a tenant sees is bookings quietly not arriving — so say it
+              here, where the secret is set. */}
+          <p className={`mb-3 text-sm ${calcomSecretMask ? "text-slate-500" : "text-amber-700"}`}>
+            {calcomSecretMask ? he.calcomWebhookSecretSet : he.calcomWebhookSecretMissing}
+          </p>
           <form action={saveCalcomWebhookSecretAction} className="flex flex-wrap items-end gap-2">
             <div className="min-w-0 flex-1">
               <label className="label" htmlFor="calcom-secret">
@@ -139,8 +145,16 @@ export default async function SettingsPage({
                 placeholder={calcomSecretMask ?? he.calcomWebhookSecretPlaceholder}
                 className="input w-full text-left"
               />
+              {calcomSecretMask ? (
+                <p className="mt-1 text-xs text-slate-400">{he.calcomWebhookSecretKeepHint}</p>
+              ) : null}
             </div>
             <button className="btn-primary shrink-0">{he.saveSecret}</button>
+            {calcomSecretMask ? (
+              <button name="clear" value="1" className="btn-ghost shrink-0 text-sm text-rose-600">
+                {he.calcomWebhookSecretClear}
+              </button>
+            ) : null}
           </form>
         </Card>
 

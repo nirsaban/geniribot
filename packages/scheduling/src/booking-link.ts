@@ -74,5 +74,11 @@ export function bookingLink(base: string, lead: BookingLinkLead): string {
   // decode identically, but literal brackets are what the docs show and what a
   // tenant pasting the link will recognise.
   url.search = url.search.replace(/%5B/g, "[").replace(/%5D/g, "]");
-  return url.toString();
+
+  // A Hebrew Cal.com handle ("cal.com/ניר-סבאן/20min") survives `new URL` only
+  // as percent-encoded UTF-8, which lands in the chat as an unreadable wall of
+  // %D7%A0%D7%99…. The lead is being asked to trust this link, so show it the
+  // way the tenant wrote it — same URL, and WhatsApp encodes it on the way out.
+  const path = decodeURI(url.pathname);
+  return url.toString().replace(url.pathname, path);
 }

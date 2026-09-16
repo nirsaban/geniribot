@@ -45,11 +45,25 @@ export async function saveFollowUpAction(formData: FormData): Promise<void> {
   revalidatePath("/dashboard/settings");
 }
 
-/** Save (or clear) the Cal.com webhook signing secret. */
+/**
+ * Save the Cal.com webhook signing secret — or, only when explicitly asked,
+ * clear it.
+ *
+ * An empty field means "leave it alone", never "delete it". The input renders
+ * blank on every load (the stored secret is shown as a masked placeholder, and
+ * a password is never sent back to the browser), so treating empty as a delete
+ * turned an idle Save on this page into a silent teardown of the integration:
+ * the secret vanished, Cal.com kept POSTing, every delivery was rejected 401,
+ * and bookings stopped reaching the CRM with nothing in the UI to show why.
+ */
 export async function saveCalcomWebhookSecretAction(formData: FormData): Promise<void> {
   const org = await requireOrg();
+  if (formData.get("clear") === "1") {
+    await deleteSecret(org, "calcom_webhook_secret");
+    revalidatePath("/dashboard/settings");
+    return;
+  }
   const value = String(formData.get("secret") ?? "").trim();
   if (value) await setSecret(org, "calcom_webhook_secret", value);
-  else await deleteSecret(org, "calcom_webhook_secret");
   revalidatePath("/dashboard/settings");
 }
